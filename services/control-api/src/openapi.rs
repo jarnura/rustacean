@@ -5,19 +5,26 @@
 
 use utoipa::OpenApi;
 
-use crate::routes::health;
+use crate::routes::{auth, health};
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
         health::health_check,
         health::ready_check,
+        auth::signup,
+    ),
+    components(
+        schemas(
+            health::ProbeResponse,
+            auth::SignupRequest,
+            auth::SignupResponse,
+        )
     ),
     info(
         title = "rust-brain control API",
         version = "0.1.0",
-        description = "Control-plane API for rust-brain. \
-            Auth, tenant management, and API key endpoints are added in subsequent waves.",
+        description = "Control-plane API for rust-brain: auth, tenant management, and API key endpoints.",
         contact(
             name = "rust-brain",
             url = "https://github.com/jarnura/rustacean",
@@ -25,6 +32,7 @@ use crate::routes::health;
     ),
     tags(
         (name = "health", description = "Liveness and readiness probes"),
+        (name = "auth", description = "Authentication and session management"),
     ),
 )]
 pub struct ApiDoc;

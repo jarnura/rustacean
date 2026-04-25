@@ -7,6 +7,7 @@ members = [
     "crates/rb-tenant",
     "crates/rb-storage-pg",
     "crates/rb-secrets",
+    "crates/rb-auth",
     "services/migrate",
     "services/control-api",
 ]
@@ -38,7 +39,7 @@ prost = "0.13"
 prost-types = "0.13"
 prost-build = "0.13"
 # Database (used in RUSAA-19)
-sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono"] }
 # Kafka (used in RUSAA-20)
 rdkafka = { version = "0.37", features = ["cmake-build"] }
 # Error handling
@@ -62,6 +63,11 @@ utoipa = { version = "5", features = ["axum_extras", "uuid"] }
 utoipa-axum = "0.2"
 # Secret management (REQ-DV-04 / rb-secrets)
 zeroize = { version = "1", features = ["derive"] }
+# Auth (REQ-AU-01 / rb-auth)
+argon2 = "0.5"
+sha2 = "0.10"
+rand = "0.9"
+dashmap = "6"
 # Email (RUSAA-37 / rb-email)
 minijinja = "2"
 lettre = { version = "0.11", features = ["smtp-transport", "tokio1-rustls-tls", "builder"], default-features = false }

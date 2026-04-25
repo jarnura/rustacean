@@ -1,0 +1,9 @@
+Verify your email address
+
+Please verify your email address by clicking the link below:
+
+{{ link }}
+
+This link expires in 1 hour.
+
+If you did not sign up for Rust Brain, you can safely ignore this email.

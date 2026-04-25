@@ -6,7 +6,7 @@
 ///   `TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5433/postgres cargo test -p migrate`
 use std::path::Path;
 
-use migrate::pg::{migrate_control, migrate_tenant};
+use migrate::{migrate_control, migrate_tenant};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use tempfile::TempDir;

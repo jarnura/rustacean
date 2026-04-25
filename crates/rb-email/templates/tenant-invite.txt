@@ -1,0 +1,9 @@
+You're invited to join {{ tenant_name }}
+
+You have been invited to join {{ tenant_name }} on Rust Brain.
+
+Accept your invitation:
+
+{{ link }}
+
+If you were not expecting this invitation, you can safely ignore this email.

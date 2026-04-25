@@ -3,6 +3,8 @@ resolver = "2"
 members = [
     "crates/rb-tracing",
     "crates/rb-schemas",
+    "crates/rb-tenant",
+    "crates/rb-storage-pg",
     "services/migrate",
 ]
 
@@ -45,6 +47,8 @@ uuid = { version = "1", features = ["v4", "serde"] }
 clap = { version = "4", features = ["derive"] }
 # Configuration / YAML
 serde_yaml = "0.9"
+# Time
+chrono = { version = "0.4", features = ["serde"] }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

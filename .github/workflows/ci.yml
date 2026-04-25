@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ── Real Rust jobs ─────────────────────────────────────────────────────────
+
+  cargo-check:
+    name: cargo check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace
+
+  cargo-test:
+    name: cargo test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace -- -D warnings
+
+  # ── Script-backed jobs ─────────────────────────────────────────────────────
+
+  file-size:
+    name: file size (600-line cap)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/check-file-sizes.sh
+
+  public-surface:
+    name: public surface lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: bash scripts/check-pub-use.sh
+
+  openapi-sync:
+    name: openapi sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/check-openapi-sync.sh
+
+  # ── Dependency graph & policy ──────────────────────────────────────────────
+
+  crate-cycle:
+    name: crate cycle check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate workspace dependency graph (cycles = cargo-check fail)
+        run: cargo metadata --format-version 1 --no-deps > /dev/null
+      - name: Check license / ban / source policies
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check bans licenses sources
+
+  # ── Security ───────────────────────────────────────────────────────────────
+
+  security-lint:
+    name: security lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo audit
+        uses: rustsec/audit-check@v1.4.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Stub jobs (wired in later waves) ──────────────────────────────────────
+
+  docker-build:
+    name: docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build service images
+        # Dockerfiles are added in a later wave; job scaffolded here per REQ-DV-06
+        run: echo "docker-build stub — no Dockerfiles yet"
+
+  playwright-e2e:
+    name: playwright e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Playwright suite
+        # Full wiring against compose/test.yml happens in Wave 8
+        run: echo "playwright-e2e stub — wired in Wave 8"
+
+  rb-feature-resolver-isolation:
+    name: rb-feature-resolver isolation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check zero rb-* imports in rb-feature-resolver
+        # Crate does not exist yet; stub ensures job slot exists in CI matrix
+        run: echo "rb-feature-resolver-isolation stub — crate not yet created"
+
+  tenant-isolation:
+    name: tenant isolation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cross-tenant row count must be zero
+        # Requires DB integration via compose/test.yml; implemented when migration runner lands
+        run: echo "tenant-isolation stub — DB integration pending"

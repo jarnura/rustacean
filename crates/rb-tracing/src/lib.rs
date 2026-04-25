@@ -1,3 +1,7 @@
+mod json_layer;
+
+pub use json_layer::StructuredJsonLayer;
+
 use opentelemetry::{global, trace::TracerProvider as _};
 use opentelemetry_otlp::{SpanExporter, WithExportConfig as _};
 use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider, Resource};
@@ -30,6 +34,11 @@ impl Drop for TracingGuard {
 /// Installs a W3C `TraceContext` propagator, a batched OTLP gRPC span exporter,
 /// and a `tracing-subscriber` registry with JSON (production) or `pretty`
 /// (dev) formatting. Call once at binary startup before any `tracing` macros.
+///
+/// In JSON mode the subscriber uses [`StructuredJsonLayer`], which writes one
+/// JSON line per event containing `timestamp`, `level`, `target`, `trace_id`,
+/// `span_id`, and `fields`.  `trace_id` / `span_id` are non-empty only when
+/// the event is emitted inside an active OpenTelemetry span.
 ///
 /// Configuration via env vars:
 /// - `OTEL_EXPORTER_OTLP_ENDPOINT` — gRPC endpoint (default: `http://localhost:4317`)
@@ -75,7 +84,7 @@ pub fn init(service_name: &str) -> Result<TracingGuard, TracingError> {
     } else {
         tracing_subscriber::registry()
             .with(EnvFilter::from_default_env())
-            .with(fmt::layer().json())
+            .with(StructuredJsonLayer::stdout())
             .with(OpenTelemetryLayer::new(provider.tracer("rb-tracing")))
             .try_init()
             .map_err(|e| TracingError::Subscriber(e.to_string()))?;

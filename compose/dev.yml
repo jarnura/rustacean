@@ -194,6 +194,36 @@ services:
     networks:
       - rb-net
 
+  control-api:
+    build:
+      context: ..
+      dockerfile: docker/control-api/Dockerfile
+    image: rustbrain/control-api:dev
+    environment:
+      RB_DATABASE_URL: postgres://rustbrain:rustbrain@postgres:5432/rustbrain
+      RB_LISTEN_ADDR: "0.0.0.0:8080"
+      RB_CORS_ORIGINS: "http://localhost:5173"
+      RB_BASE_URL: "http://localhost:8080"
+      RB_EMAIL_TRANSPORT: console
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: control-api
+      RUST_LOG: "info,control_api=debug"
+    ports:
+      - "8080:8080"
+    networks:
+      - rb-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   caddy:
     image: caddy:2-alpine
     volumes:

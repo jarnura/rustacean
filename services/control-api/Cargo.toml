@@ -1,0 +1,40 @@
+[package]
+name = "control-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "control-api"
+path = "src/main.rs"
+
+[lib]
+name = "control_api"
+path = "src/lib.rs"
+
+[dependencies]
+rb-secrets = { path = "../../crates/rb-secrets", version = "0.1.0" }
+rb-tracing = { path = "../../crates/rb-tracing", version = "0.1.0" }
+tokio.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+axum.workspace = true
+axum-extra.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+utoipa.workspace = true
+utoipa-axum.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }
+tower = { workspace = true, features = ["util"] }
+http-body-util = "0.1"
+
+[lints]
+workspace = true

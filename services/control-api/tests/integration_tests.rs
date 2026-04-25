@@ -6,7 +6,7 @@ use http_body_util::BodyExt as _;
 use tower::ServiceExt as _;
 
 fn app() -> axum::Router {
-    control_api::routes::build()
+    control_api::build()
 }
 
 async fn collect_body(body: Body) -> Vec<u8> {

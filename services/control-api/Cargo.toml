@@ -15,8 +15,8 @@ name = "control_api"
 path = "src/lib.rs"
 
 [dependencies]
-rb-secrets = { path = "../../crates/rb-secrets" }
-rb-tracing = { path = "../../crates/rb-tracing" }
+rb-secrets = { path = "../../crates/rb-secrets", version = "0.1.0" }
+rb-tracing = { path = "../../crates/rb-tracing", version = "0.1.0" }
 tokio.workspace = true
 tracing.workspace = true
 serde.workspace = true

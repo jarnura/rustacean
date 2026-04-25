@@ -1,6 +1,6 @@
-pub mod error;
-pub mod source;
-pub mod value;
+mod error;
+mod source;
+mod value;
 
 pub use error::SecretError;
 pub use source::{EnvSource, FileSource, SecretSource};

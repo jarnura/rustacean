@@ -14,6 +14,7 @@ use axum::{
 /// [`AuthContext::Anonymous`]; full extraction is wired in RUSAA-29.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
+#[allow(dead_code)]
 pub enum AuthContext {
     Anonymous,
 }

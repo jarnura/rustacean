@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use control_api::{config::Config, server};
+use control_api::Config;
 use utoipa::OpenApi as _;
 
 #[derive(Parser)]
@@ -24,14 +24,14 @@ async fn main() -> Result<()> {
 
     match cli.command.unwrap_or(Command::Serve) {
         Command::PrintOpenapi => {
-            let spec = control_api::openapi::ApiDoc::openapi();
+            let spec = control_api::ApiDoc::openapi();
             println!("{}", serde_json::to_string_pretty(&spec)?);
             Ok(())
         }
         Command::Serve => {
             let config = Config::from_env()?;
             let _guard = rb_tracing::init(&config.service_name)?;
-            server::run(config).await
+            control_api::run(config).await
         }
     }
 }

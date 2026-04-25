@@ -1,0 +1,18 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "description": "rust-brain v2 — placeholder dashboard (populated in Wave 8)",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["rust-brain"],
+  "title": "rust-brain Overview",
+  "uid": "rust-brain-overview",
+  "version": 1
+}

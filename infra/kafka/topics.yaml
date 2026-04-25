@@ -1,0 +1,48 @@
+topics:
+  - name: rb.ingest.clone.commands
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"  # 7 days
+
+  - name: rb.ingest.expand.commands
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"
+
+  - name: rb.ingest.parse.commands
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"
+
+  - name: rb.ingest.typecheck.commands
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"
+
+  - name: rb.ingest.graph.commands
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"
+
+  - name: rb.ingest.embed.commands
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"
+
+  - name: rb.projector.events
+    partitions: 12
+    replication_factor: 1
+    config:
+      retention.ms: "2592000000"  # 30 days
+
+  - name: rb.audit.events
+    partitions: 3
+    replication_factor: 1
+    config:
+      retention.ms: "7776000000"  # 90 days

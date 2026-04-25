@@ -1,0 +1,7 @@
+name: rustbrain-full
+
+include:
+  - dev.yml
+
+# Rust service containers added per-wave as binaries are built.
+# Wave 4+: ingestion services, graph builder, embedding worker, API gateway.

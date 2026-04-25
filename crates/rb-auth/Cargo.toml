@@ -1,0 +1,29 @@
+[package]
+name = "rb-auth"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rb-tenant = { path = "../rb-tenant", version = "0.1.0" }
+rb-schemas = { path = "../rb-schemas", version = "0.1.0" }
+thiserror.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+argon2.workspace = true
+sha2.workspace = true
+rand.workspace = true
+dashmap.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lints]
+workspace = true

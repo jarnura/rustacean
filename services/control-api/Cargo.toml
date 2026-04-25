@@ -15,7 +15,12 @@ name = "control_api"
 path = "src/lib.rs"
 
 [dependencies]
+rb-auth = { path = "../../crates/rb-auth", version = "0.1.0" }
+rb-email = { path = "../../crates/rb-email", version = "0.1.0" }
 rb-secrets = { path = "../../crates/rb-secrets", version = "0.1.0" }
+rb-tenant = { path = "../../crates/rb-tenant", version = "0.1.0" }
+rb-schemas = { path = "../../crates/rb-schemas", version = "0.1.0" }
+rb-storage-pg = { path = "../../crates/rb-storage-pg", version = "0.1.0" }
 rb-tracing = { path = "../../crates/rb-tracing", version = "0.1.0" }
 tokio.workspace = true
 tracing.workspace = true
@@ -30,6 +35,9 @@ tower.workspace = true
 tower-http.workspace = true
 utoipa.workspace = true
 utoipa-axum.workspace = true
+sqlx.workspace = true
+uuid.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -9,7 +9,7 @@ pub struct Config {
     pub database_url: String,
     pub cors_origins: Vec<String>,
     pub base_url: String,
-    pub session_ttl_days: u64,
+    pub session_ttl_days: i64,
     pub argon2_memory_kb: u32,
     pub argon2_time_cost: u32,
     pub argon2_parallelism: u32,
@@ -60,8 +60,10 @@ impl Config {
         })
     }
 
-    /// Creates a minimal config suitable for tests (no real DB needed).
-    #[cfg(test)]
+    /// Creates a minimal config for tests and integration-test harnesses.
+    ///
+    /// Uses fast argon2id params and noop email transport.
+    #[doc(hidden)]
     #[must_use]
     pub fn for_test() -> Self {
         Self {
@@ -70,8 +72,8 @@ impl Config {
             cors_origins: vec!["http://localhost:5173".to_owned()],
             base_url: "http://localhost:8080".to_owned(),
             session_ttl_days: 30,
-            argon2_memory_kb: 19456,
-            argon2_time_cost: 2,
+            argon2_memory_kb: 64,
+            argon2_time_cost: 1,
             argon2_parallelism: 1,
             email_transport: "noop".to_owned(),
             service_name: "control-api-test".to_owned(),

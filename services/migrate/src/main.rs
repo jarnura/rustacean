@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
                 .unwrap_or_else(|| root.join("infra").join("kafka").join("topics.yaml"));
 
             if args.status {
-                kafka::print_status(&brokers, &config_path).await?;
+                kafka::print_status(&brokers, &config_path)?;
             } else {
                 let result = kafka::apply_topics(&brokers, &config_path).await?;
                 if result.created == 0 && result.configs_applied == 0 {

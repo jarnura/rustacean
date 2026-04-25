@@ -13,7 +13,7 @@ pub async fn apply_topics(bootstrap_servers: &str, config_path: &Path) -> Result
     kafka.apply(&topics_file).await
 }
 
-pub async fn print_status(bootstrap_servers: &str, config_path: &Path) -> Result<()> {
+pub fn print_status(bootstrap_servers: &str, config_path: &Path) -> Result<()> {
     let topics_file = load_topics_file(config_path)?;
     let kafka = KafkaAdmin::new(bootstrap_servers)?;
     let statuses = kafka.status(&topics_file)?;

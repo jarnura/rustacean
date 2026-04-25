@@ -169,7 +169,5 @@ async fn test_print_status_does_not_panic() {
     let name = unique_topic("rb.test.print");
     let yaml = make_topics_yaml(&[(&name, 2, "3600000")]);
 
-    print_status(&brokers, yaml.path())
-        .await
-        .expect("print_status must not fail");
+    print_status(&brokers, yaml.path()).expect("print_status must not fail");
 }

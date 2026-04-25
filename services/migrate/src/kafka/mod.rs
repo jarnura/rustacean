@@ -1,6 +1,31 @@
-// RUSAA-20: Kafka migration runner — implemented in a follow-up issue.
-// This stub satisfies the compile-time dependency from main.rs.
+mod admin;
 
-pub fn migrate_kafka() -> anyhow::Result<()> {
-    anyhow::bail!("migrate kafka: not yet implemented (RUSAA-20)")
+#[allow(unused_imports)]
+pub use admin::{load_topics_file, ApplyResult, KafkaAdmin, TopicDef, TopicStatus, TopicsFile};
+
+use std::path::Path;
+
+use anyhow::Result;
+
+pub async fn apply_topics(bootstrap_servers: &str, config_path: &Path) -> Result<ApplyResult> {
+    let topics_file = load_topics_file(config_path)?;
+    let kafka = KafkaAdmin::new(bootstrap_servers)?;
+    kafka.apply(&topics_file).await
+}
+
+pub async fn print_status(bootstrap_servers: &str, config_path: &Path) -> Result<()> {
+    let topics_file = load_topics_file(config_path)?;
+    let kafka = KafkaAdmin::new(bootstrap_servers)?;
+    let statuses = kafka.status(&topics_file)?;
+
+    println!("{:<40} {:>8} {:>8} {}", "TOPIC", "DESIRED", "LIVE", "STATUS");
+    println!("{}", "-".repeat(65));
+    for s in &statuses {
+        let live = s
+            .live_partitions
+            .map_or_else(|| "-".to_owned(), |n| n.to_string());
+        let status = if s.exists { "ok" } else { "missing" };
+        println!("{:<40} {:>8} {:>8} {}", s.name, s.desired_partitions, live, status);
+    }
+    Ok(())
 }

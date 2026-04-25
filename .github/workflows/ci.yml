@@ -165,4 +165,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Cross-tenant row count must be zero
-        run: cargo test -p rb-storage-pg --test integration
+        run: cargo test -p rb-storage-pg --test integration --test routing

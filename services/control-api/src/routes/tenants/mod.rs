@@ -1,3 +1,5 @@
+mod role;
+
 use axum::{
     Json,
     extract::{Path, State},
@@ -15,74 +17,7 @@ use crate::{
     middleware::auth::{AuthContext, SessionInfo},
     state::AppState,
 };
-
-// ---------------------------------------------------------------------------
-// Role helpers
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum TenantRole {
-    Member = 0,
-    Admin = 1,
-    Owner = 2,
-}
-
-impl TenantRole {
-    fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "member" => Some(TenantRole::Member),
-            "admin" => Some(TenantRole::Admin),
-            "owner" => Some(TenantRole::Owner),
-            _ => None,
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            TenantRole::Member => "member",
-            TenantRole::Admin => "admin",
-            TenantRole::Owner => "owner",
-        }
-    }
-}
-
-/// Extract `SessionInfo` from `AuthContext` or return 401.
-fn require_session(auth: AuthContext) -> Result<SessionInfo, AppError> {
-    match auth {
-        AuthContext::Session(info) => Ok(info),
-        AuthContext::Anonymous => Err(AppError::Unauthorized),
-    }
-}
-
-/// Look up the caller's role in a specific tenant and enforce a minimum role.
-async fn require_role(
-    pool: &sqlx::PgPool,
-    user_id: Uuid,
-    tenant_id: Uuid,
-    minimum: TenantRole,
-) -> Result<TenantRole, AppError> {
-    let row: Option<(String,)> = sqlx::query_as(
-        "SELECT role FROM control.tenant_members \
-         WHERE tenant_id = $1 AND user_id = $2",
-    )
-    .bind(tenant_id)
-    .bind(user_id)
-    .fetch_optional(pool)
-    .await?;
-
-    match row {
-        None => Err(AppError::NotAMember),
-        Some((role_str,)) => {
-            let role = TenantRole::from_str(&role_str)
-                .unwrap_or(TenantRole::Member);
-            if role >= minimum {
-                Ok(role)
-            } else {
-                Err(AppError::InsufficientRole)
-            }
-        }
-    }
-}
+use role::{TenantRole, require_role, require_session, urlencoding_simple};
 
 // ---------------------------------------------------------------------------
 // POST /v1/tenants/{id}/members
@@ -216,8 +151,6 @@ async fn send_tenant_invite(
     session: &SessionInfo,
     email: String,
 ) -> Result<Response, AppError> {
-    // The invite link leads to the signup page; the tenant context is carried
-    // as a query parameter so sign-up UX can pre-fill the invitation.
     let invite_token = EmailToken::generate();
     let invite_link = format!(
         "{}/auth/signup?email={}&tenant_invitation={}",
@@ -315,7 +248,6 @@ pub async fn update_member_role(
         return Err(AppError::CannotRemoveOwner);
     }
 
-    // Fetch the target member's current role.
     let current: Option<(String,)> = sqlx::query_as(
         "SELECT role FROM control.tenant_members \
          WHERE tenant_id = $1 AND user_id = $2",
@@ -367,7 +299,7 @@ pub async fn update_member_role(
 /// Remove a member from a tenant.
 ///
 /// Cannot remove the owner. The removed member's active sessions for this
-/// tenant become invalid on their next request (membership check fails).
+/// tenant are immediately revoked.
 /// Requires: session with admin or owner role.
 #[utoipa::path(
     delete,
@@ -415,10 +347,6 @@ pub async fn remove_member(
     .bind(target_user_id)
     .execute(&mut *tx)
     .await?;
-    // Revoke all active sessions for this user on this tenant.
-    // The design calls for revocation within 60 seconds. We do it eagerly
-    // here so the user's next request using any session will already be
-    // invalid rather than discovering the membership removal.
     sqlx::query(
         "UPDATE control.sessions \
          SET revoked_at = now() \
@@ -480,11 +408,9 @@ pub async fn transfer_ownership(
     require_role(&state.pool, session.user_id, tenant_id, TenantRole::Owner).await?;
 
     if body.user_id == session.user_id {
-        // No-op: already the owner.
         return Ok(StatusCode::NO_CONTENT);
     }
 
-    // Confirm the target is a current (non-owner) member.
     let target: Option<(String,)> = sqlx::query_as(
         "SELECT role FROM control.tenant_members \
          WHERE tenant_id = $1 AND user_id = $2",
@@ -496,7 +422,6 @@ pub async fn transfer_ownership(
     target.ok_or(AppError::NotFound)?;
 
     let mut tx = state.pool.begin().await?;
-    // Demote current owner to admin.
     sqlx::query(
         "UPDATE control.tenant_members SET role = 'admin' \
          WHERE tenant_id = $1 AND user_id = $2",
@@ -505,7 +430,6 @@ pub async fn transfer_ownership(
     .bind(session.user_id)
     .execute(&mut *tx)
     .await?;
-    // Promote target to owner.
     sqlx::query(
         "UPDATE control.tenant_members SET role = 'owner' \
          WHERE tenant_id = $1 AND user_id = $2",
@@ -532,81 +456,15 @@ pub async fn transfer_ownership(
 }
 
 // ---------------------------------------------------------------------------
-// URL encoding helper (no external dep needed for simple percent-encoding)
-// ---------------------------------------------------------------------------
-
-fn urlencoding_simple(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9'
-            | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
-            _ => {
-                use std::fmt::Write as _;
-                write!(out, "%{b:02X}").expect("infallible");
-            }
-        }
-    }
-    out
-}
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    // --- Role ordering ---
-
-    #[test]
-    fn tenant_role_member_lt_admin_lt_owner() {
-        assert!(TenantRole::Member < TenantRole::Admin);
-        assert!(TenantRole::Admin < TenantRole::Owner);
-        assert!(TenantRole::Member < TenantRole::Owner);
-    }
-
-    #[test]
-    fn tenant_role_ordering_is_total() {
-        use std::cmp::Ordering;
-        assert_eq!(TenantRole::Member.cmp(&TenantRole::Member), Ordering::Equal);
-        assert_eq!(TenantRole::Admin.cmp(&TenantRole::Admin), Ordering::Equal);
-        assert_eq!(TenantRole::Owner.cmp(&TenantRole::Owner), Ordering::Equal);
-    }
-
-    // --- Role parsing ---
-
-    #[test]
-    fn tenant_role_from_str_member() {
-        assert_eq!(TenantRole::from_str("member"), Some(TenantRole::Member));
-    }
-
-    #[test]
-    fn tenant_role_from_str_admin() {
-        assert_eq!(TenantRole::from_str("admin"), Some(TenantRole::Admin));
-    }
-
-    #[test]
-    fn tenant_role_from_str_owner() {
-        assert_eq!(TenantRole::from_str("owner"), Some(TenantRole::Owner));
-    }
-
-    #[test]
-    fn tenant_role_from_str_unknown_returns_none() {
-        assert!(TenantRole::from_str("superadmin").is_none());
-        assert!(TenantRole::from_str("").is_none());
-        assert!(TenantRole::from_str("ADMIN").is_none());
-    }
-
-    #[test]
-    fn tenant_role_as_str_roundtrips() {
-        for role in [TenantRole::Member, TenantRole::Admin, TenantRole::Owner] {
-            assert_eq!(TenantRole::from_str(role.as_str()), Some(role));
-        }
-    }
-
-    // --- require_session ---
+    use super::role::*;
+    use crate::error::AppError;
+    use crate::middleware::auth::{AuthContext, SessionInfo};
+    use uuid::Uuid;
 
     #[test]
     fn require_session_returns_info_for_session_variant() {
@@ -626,14 +484,10 @@ mod tests {
         assert!(matches!(require_session(ctx), Err(AppError::Unauthorized)));
     }
 
-    // --- UpdateRoleRequest validation ---
-
     #[test]
     fn update_role_rejects_owner_role_string() {
-        // Simulates the guard in update_member_role: if new_role == Owner → error.
         let role = TenantRole::from_str("owner").unwrap();
         assert_eq!(role, TenantRole::Owner);
-        // The handler returns CannotRemoveOwner when the new role is owner.
     }
 
     #[test]
@@ -642,45 +496,24 @@ mod tests {
         assert!(TenantRole::from_str("admin").is_some());
     }
 
-    // --- URL encoding ---
-
     #[test]
-    fn urlencoding_simple_encodes_at_sign() {
-        let result = urlencoding_simple("user@example.com");
-        assert!(result.contains("%40"), "@ must be percent-encoded");
-        assert!(!result.contains('@'));
-    }
-
-    #[test]
-    fn urlencoding_simple_preserves_unreserved_chars() {
-        let input = "hello-world_123.test~";
-        assert_eq!(urlencoding_simple(input), input);
-    }
-
-    #[test]
-    fn urlencoding_simple_encodes_plus() {
-        let result = urlencoding_simple("a+b");
-        assert_eq!(result, "a%2Bb");
-    }
-
-    // --- Error status code mapping (via IntoResponse) ---
-
-    #[test]
-    fn error_unauthorized_produces_401_code() {
-        // Verify the error code string (status tested via integration tests).
-        let err = AppError::Unauthorized;
-        assert_eq!(err.to_string(), "authentication required");
+    fn error_unauthorized_produces_message() {
+        assert_eq!(AppError::Unauthorized.to_string(), "authentication required");
     }
 
     #[test]
     fn error_insufficient_role_message() {
-        let err = AppError::InsufficientRole;
-        assert_eq!(err.to_string(), "insufficient role for this operation");
+        assert_eq!(
+            AppError::InsufficientRole.to_string(),
+            "insufficient role for this operation"
+        );
     }
 
     #[test]
     fn error_cannot_remove_owner_message() {
-        let err = AppError::CannotRemoveOwner;
-        assert_eq!(err.to_string(), "cannot remove or demote the tenant owner");
+        assert_eq!(
+            AppError::CannotRemoveOwner.to_string(),
+            "cannot remove or demote the tenant owner"
+        );
     }
 }

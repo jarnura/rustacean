@@ -10,7 +10,7 @@ use rb_email::from_transport;
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt as _;
 
-use control_api::{Config, build, state::AppState};
+use control_api::{AppState, Config, build};
 
 fn test_state() -> AppState {
     let config = Config::for_test();

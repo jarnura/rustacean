@@ -18,7 +18,7 @@ pub async fn print_status(bootstrap_servers: &str, config_path: &Path) -> Result
     let kafka = KafkaAdmin::new(bootstrap_servers)?;
     let statuses = kafka.status(&topics_file)?;
 
-    println!("{:<40} {:>8} {:>8} {}", "TOPIC", "DESIRED", "LIVE", "STATUS");
+    println!("{:<40} {:>8} {:>8} STATUS", "TOPIC", "DESIRED", "LIVE");
     println!("{}", "-".repeat(65));
     for s in &statuses {
         let live = s

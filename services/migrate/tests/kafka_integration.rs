@@ -10,7 +10,7 @@
 /// the Docker network where `kafka` resolves correctly.
 use std::io::Write;
 
-use migrate::kafka::{apply_topics, load_topics_file, print_status, KafkaAdmin};
+use migrate::{apply_topics, load_topics_file, print_status, KafkaAdmin};
 use tempfile::NamedTempFile;
 
 fn test_brokers() -> Option<String> {

@@ -83,7 +83,7 @@ impl KafkaAdmin {
             .topics()
             .iter()
             .filter(|t: &&MetadataTopic| !t.name().starts_with("__"))
-            .map(|t: &MetadataTopic| (t.name().to_owned(), t.partitions().len() as i32))
+            .map(|t: &MetadataTopic| (t.name().to_owned(), i32::try_from(t.partitions().len()).unwrap_or(0)))
             .collect())
     }
 

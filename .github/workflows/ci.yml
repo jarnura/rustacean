@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install rdkafka build dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y cmake libssl-dev libsasl2-dev zlib1g-dev libcurl4-openssl-dev
       - run: cargo check --workspace
 
   cargo-test:
@@ -32,6 +34,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install rdkafka build dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y cmake libssl-dev libsasl2-dev zlib1g-dev libcurl4-openssl-dev
       - run: cargo test --workspace
 
   clippy:
@@ -43,6 +47,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Install rdkafka build dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y cmake libssl-dev libsasl2-dev zlib1g-dev libcurl4-openssl-dev
       - run: cargo clippy --workspace -- -D warnings
 
   # ── Script-backed jobs ─────────────────────────────────────────────────────

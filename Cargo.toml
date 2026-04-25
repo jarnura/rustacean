@@ -43,6 +43,8 @@ anyhow = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 # CLI
 clap = { version = "4", features = ["derive"] }
+# Configuration / YAML
+serde_yaml = "0.9"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

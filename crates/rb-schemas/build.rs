@@ -1,0 +1,21 @@
+use std::path::PathBuf;
+
+fn main() {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir
+        .parent()
+        .expect("crates/")
+        .parent()
+        .expect("workspace root");
+    let proto_root = workspace_root.join("proto");
+    let ingest_proto = proto_root.join("rust_brain/v1/ingest.proto");
+
+    println!("cargo:rerun-if-changed={}", ingest_proto.display());
+
+    let fds = protox::compile([&ingest_proto], [&proto_root])
+        .expect("protobuf compilation failed");
+
+    prost_build::Config::new()
+        .compile_fds(fds)
+        .expect("prost code generation failed");
+}

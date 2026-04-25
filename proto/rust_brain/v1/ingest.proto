@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package rust_brain.v1;
+
+// Carries raw event data submitted to the ingest pipeline.
+message IngestRequest {
+  // UUID of the tenant that owns this ingestion.
+  string tenant_id = 1;
+  // Stable idempotency key; duplicates with the same event_id are deduplicated.
+  string event_id = 2;
+  // Source system identifier (e.g. "github", "api").
+  string source = 3;
+  // Opaque serialised payload bytes.
+  bytes payload = 4;
+  // Unix epoch milliseconds at which the producer created this request.
+  int64 created_at_ms = 5;
+}
+
+// Processing lifecycle states for an IngestRequest.
+enum IngestStatus {
+  INGEST_STATUS_UNSPECIFIED = 0;
+  INGEST_STATUS_PENDING = 1;
+  INGEST_STATUS_PROCESSING = 2;
+  INGEST_STATUS_DONE = 3;
+  INGEST_STATUS_FAILED = 4;
+}
+
+// Emitted by the ingest pipeline whenever an IngestRequest changes status.
+message IngestStatusEvent {
+  // event_id copied from the originating IngestRequest.
+  string ingest_request_id = 1;
+  // UUID of the tenant that owns this event.
+  string tenant_id = 2;
+  // Current processing status.
+  IngestStatus status = 3;
+  // Human-readable error detail; populated only when status = FAILED.
+  string error_message = 4;
+  // Unix epoch milliseconds at which this status transition occurred.
+  int64 occurred_at_ms = 5;
+}

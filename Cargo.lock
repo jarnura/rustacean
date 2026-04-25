@@ -1692,6 +1692,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "rb-storage-pg"
+version = "0.1.0"
+dependencies = [
+ "rb-schemas",
+ "rb-tenant",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
+name = "rb-tenant"
+version = "0.1.0"
+dependencies = [
+ "rb-schemas",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "rb-tracing"
 version = "0.1.0"
 dependencies = [

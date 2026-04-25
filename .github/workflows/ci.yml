@@ -144,8 +144,25 @@ jobs:
   tenant-isolation:
     name: tenant isolation
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: rustbrain
+          POSTGRES_PASSWORD: rustbrain
+          POSTGRES_DB: rustbrain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgres://rustbrain:rustbrain@localhost:5432/rustbrain
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: Cross-tenant row count must be zero
-        # Requires DB integration via compose/test.yml; implemented when migration runner lands
-        run: echo "tenant-isolation stub — DB integration pending"
+        run: cargo test -p rb-storage-pg --test integration

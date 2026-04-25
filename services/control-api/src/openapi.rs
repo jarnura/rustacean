@@ -5,7 +5,7 @@
 
 use utoipa::OpenApi;
 
-use crate::routes::{auth, health};
+use crate::routes::{auth, health, tenants};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -15,6 +15,10 @@ use crate::routes::{auth, health};
         auth::signup,
         auth::forgot_password,
         auth::reset_password,
+        tenants::invite_member,
+        tenants::update_member_role,
+        tenants::remove_member,
+        tenants::transfer_ownership,
     ),
     components(
         schemas(
@@ -23,6 +27,11 @@ use crate::routes::{auth, health};
             auth::SignupResponse,
             auth::ForgotPasswordRequest,
             auth::ResetPasswordRequest,
+            tenants::InviteMemberRequest,
+            tenants::InviteMemberResponse,
+            tenants::UpdateRoleRequest,
+            tenants::UpdateRoleResponse,
+            tenants::TransferOwnershipRequest,
         )
     ),
     info(
@@ -37,6 +46,7 @@ use crate::routes::{auth, health};
     tags(
         (name = "health", description = "Liveness and readiness probes"),
         (name = "auth", description = "Authentication and session management"),
+        (name = "tenants", description = "Tenant membership and role management"),
     ),
 )]
 pub struct ApiDoc;

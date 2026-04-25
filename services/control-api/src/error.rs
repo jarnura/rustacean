@@ -23,6 +23,16 @@ pub enum AppError {
     InvalidEmail,
     #[error("invalid or expired token")]
     InvalidToken,
+    #[error("authentication required")]
+    Unauthorized,
+    #[error("insufficient role for this operation")]
+    InsufficientRole,
+    #[error("cannot remove or demote the tenant owner")]
+    CannotRemoveOwner,
+    #[error("user is not a member of this tenant")]
+    NotAMember,
+    #[error("user is already a member of this tenant")]
+    AlreadyMember,
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
     #[error("auth error: {0}")]
@@ -45,6 +55,17 @@ impl IntoResponse for AppError {
                 (StatusCode::UNPROCESSABLE_ENTITY, "invalid_email", self.to_string())
             }
             AppError::InvalidToken => (StatusCode::BAD_REQUEST, "invalid_token", self.to_string()),
+            AppError::Unauthorized => {
+                (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string())
+            }
+            AppError::InsufficientRole => {
+                (StatusCode::FORBIDDEN, "insufficient_role", self.to_string())
+            }
+            AppError::CannotRemoveOwner => {
+                (StatusCode::BAD_REQUEST, "cannot_remove_owner", self.to_string())
+            }
+            AppError::NotAMember => (StatusCode::FORBIDDEN, "not_a_member", self.to_string()),
+            AppError::AlreadyMember => (StatusCode::CONFLICT, "already_member", self.to_string()),
             AppError::Database(e) => {
                 tracing::error!(error = %e, "database error");
                 (

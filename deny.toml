@@ -12,8 +12,6 @@ allow = [
     "OpenSSL",
     # webpki-roots bundles Mozilla CA certificates under CDLA-Permissive-2.0
     "CDLA-Permissive-2.0",
-    # quoted_printable (dep of lettre email transport) uses zero-clause BSD
-    "0BSD",
 ]
 confidence-threshold = 0.8
 

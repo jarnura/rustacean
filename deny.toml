@@ -10,6 +10,8 @@ allow = [
     "ISC",
     "Zlib",
     "OpenSSL",
+    # webpki-roots bundles Mozilla CA certificates under CDLA-Permissive-2.0
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.8
 

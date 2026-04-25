@@ -1,0 +1,6 @@
+[advisories]
+# RUSTSEC-2023-0071: rsa Marvin Attack timing side-channel.
+# rsa v0.9.10 is pulled in exclusively by the sqlx-mysql optional feature,
+# which this project never enables (only sqlx-postgres is used). No patched
+# version of rsa exists upstream. Risk is not exploitable in this codebase.
+ignore = ["RUSTSEC-2023-0071"]

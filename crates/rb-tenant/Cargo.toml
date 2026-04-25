@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-rb-schemas = { path = "../rb-schemas" }
+rb-schemas = { path = "../rb-schemas", version = "0.1.0" }
 thiserror.workspace = true
 
 [lints]

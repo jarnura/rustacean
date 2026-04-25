@@ -13,12 +13,16 @@ use crate::routes::{auth, health};
         health::health_check,
         health::ready_check,
         auth::signup,
+        auth::forgot_password,
+        auth::reset_password,
     ),
     components(
         schemas(
             health::ProbeResponse,
             auth::SignupRequest,
             auth::SignupResponse,
+            auth::ForgotPasswordRequest,
+            auth::ResetPasswordRequest,
         )
     ),
     info(

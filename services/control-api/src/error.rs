@@ -21,6 +21,8 @@ pub enum AppError {
     WeakPassword,
     #[error("invalid email address")]
     InvalidEmail,
+    #[error("invalid or expired token")]
+    InvalidToken,
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
     #[error("auth error: {0}")]
@@ -42,6 +44,7 @@ impl IntoResponse for AppError {
             AppError::InvalidEmail => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "invalid_email", self.to_string())
             }
+            AppError::InvalidToken => (StatusCode::BAD_REQUEST, "invalid_token", self.to_string()),
             AppError::Database(e) => {
                 tracing::error!(error = %e, "database error");
                 (

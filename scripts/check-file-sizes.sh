@@ -25,6 +25,7 @@ done < <(find . -type f \( \
   ! -path "*/node_modules/*" \
   ! -path "*/vendor/*" \
   ! -path "*/generated/*" \
+  ! -name "*.generated.rs" \
   -print0)
 
 if (( FAILED == 1 )); then

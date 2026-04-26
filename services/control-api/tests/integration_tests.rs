@@ -164,6 +164,61 @@ async fn unknown_route_returns_404() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
+#[tokio::test]
+async fn openapi_json_includes_logout_path() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let raw = collect_body(response.into_body()).await;
+    let spec: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+    assert!(
+        spec["paths"]["/v1/auth/logout"]["post"].is_object(),
+        "logout POST must be present in OpenAPI spec",
+    );
+}
+
+#[tokio::test]
+async fn logout_without_session_cookie_returns_401() {
+    // No `Cookie` header → AuthContext::Anonymous resolves without touching the
+    // database, so this exercises the unauthorized branch end-to-end without a
+    // running Postgres.
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/logout")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn logout_rejects_get_method() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/auth/logout")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+}
+
 // ---------------------------------------------------------------------------
 // Real-DB integration tests — skipped when RB_DATABASE_URL is not set
 // ---------------------------------------------------------------------------
@@ -269,7 +324,6 @@ async fn integration_login_full_flow() {
         )
         .await
         .unwrap();
-
     assert_eq!(resp.status(), StatusCode::OK, "login must return 200");
 
     let cookie = resp
@@ -364,4 +418,155 @@ async fn integration_login_rate_limit() {
         .await
         .unwrap();
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS, "6th attempt must be rate-limited");
+}
+
+/// Full logout flow: signup → SQL-verify email → login → logout → assert
+/// 204 + cookie cleared + session row revoked + `auth_events` row written.
+#[tokio::test]
+#[allow(clippy::too_many_lines)]
+async fn integration_logout_full_flow() {
+    let Some((state, pool)) = real_db_state().await else {
+        return;
+    };
+    let app = build(state);
+    let email = format!("integ-logout-{}@test.example", Uuid::new_v4().simple());
+    let password = "correct-horse-battery-staple";
+
+    // 1. Signup
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/signup")
+                .header("content-type", "application/json")
+                .body(json_body(serde_json::json!({
+                    "email": email,
+                    "password": password,
+                    "tenant_name": "Integration Logout Tenant",
+                })))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED, "signup must return 201");
+
+    // 2. Verify email directly (noop transport discards the verification email)
+    sqlx::query("UPDATE control.users SET email_verified_at = NOW() WHERE email = $1")
+        .bind(&email)
+        .execute(&pool)
+        .await
+        .expect("email verification patch must succeed");
+
+    // 3. Login → capture session cookie
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/login")
+                .header("content-type", "application/json")
+                .body(json_body(serde_json::json!({
+                    "email": email,
+                    "password": password,
+                })))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK, "login must return 200");
+    let login_set_cookie = resp
+        .headers()
+        .get("set-cookie")
+        .expect("login must set rb_session cookie")
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let token = login_set_cookie
+        .split(';')
+        .next()
+        .and_then(|kv| kv.trim().strip_prefix("rb_session="))
+        .expect("rb_session token must parse out of Set-Cookie")
+        .to_owned();
+
+    // 4. Logout with that cookie
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/logout")
+                .header("cookie", format!("rb_session={token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT, "logout must return 204");
+
+    let clear = resp
+        .headers()
+        .get("set-cookie")
+        .expect("logout must Set-Cookie to clear rb_session")
+        .to_str()
+        .unwrap();
+    assert!(clear.starts_with("rb_session=;"), "Set-Cookie was: {clear}");
+    assert!(clear.contains("Max-Age=0"), "Set-Cookie was: {clear}");
+    assert!(clear.contains("Secure"), "Set-Cookie was: {clear}");
+
+    // 5. Session row revoked
+    let token_hash = rb_auth::sha256_hex(&token);
+    let revoked: bool = sqlx::query_scalar(
+        "SELECT revoked_at IS NOT NULL FROM control.sessions WHERE token_hash = $1",
+    )
+    .bind(&token_hash)
+    .fetch_one(&pool)
+    .await
+    .expect("session row must exist");
+    assert!(revoked, "session must be revoked after logout");
+
+    // 6. Logout audit event written exactly once for this user
+    let logout_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::BIGINT FROM control.auth_events e \
+         JOIN control.users u ON u.id = e.user_id \
+         WHERE u.email = $1 AND e.event = 'logout'",
+    )
+    .bind(&email)
+    .fetch_one(&pool)
+    .await
+    .expect("auth_events count must succeed");
+    assert_eq!(logout_count, 1, "exactly one logout auth_events row expected");
+
+    // 7. Re-logout with the same (now invalid) cookie → 401, no duplicate event.
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/logout")
+                .header("cookie", format!("rb_session={token}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        resp.status(),
+        StatusCode::UNAUTHORIZED,
+        "second logout must reject the now-revoked session",
+    );
+
+    let logout_count_after: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::BIGINT FROM control.auth_events e \
+         JOIN control.users u ON u.id = e.user_id \
+         WHERE u.email = $1 AND e.event = 'logout'",
+    )
+    .bind(&email)
+    .fetch_one(&pool)
+    .await
+    .expect("auth_events count must succeed");
+    assert_eq!(
+        logout_count_after, 1,
+        "logout audit must remain idempotent after replay",
+    );
 }

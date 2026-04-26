@@ -1,0 +1,49 @@
+import { Link } from "@tanstack/react-router";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { routes } from "@/lib/routes";
+import type { ReactNode } from "react";
+
+interface AppShellProps {
+  children: ReactNode;
+}
+
+export function AppShell({ children }: AppShellProps): JSX.Element {
+  return (
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <header className="border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-14 items-center justify-between gap-4">
+          <Link
+            to={routes.repos}
+            className="text-base font-semibold tracking-tight hover:text-primary"
+          >
+            Rustacean
+          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+          </div>
+        </div>
+      </header>
+      <main className="flex-1">{children}</main>
+      <footer className="border-t border-border py-4">
+        <div className="container text-xs text-muted-foreground">
+          Rustacean control plane
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+export function GlobalSuspenseFallback(): JSX.Element {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex min-h-screen items-center justify-center bg-background"
+    >
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <span className="h-3 w-3 animate-pulse rounded-full bg-muted-foreground/60" />
+        Loading…
+      </div>
+    </div>
+  );
+}

@@ -2,7 +2,7 @@
 // per ADR-005 #6) so we treat any non-network response as success in the UI.
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useForgotPassword } from "@/api";

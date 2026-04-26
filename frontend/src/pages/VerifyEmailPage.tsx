@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useMe, useVerifyEmail } from "@/api";
 import { AuthLayout } from "@/components/auth/AuthLayout";
@@ -23,8 +23,8 @@ import {
 const ME_POLL_INTERVAL_MS = 5_000;
 
 export function VerifyEmailPage(): JSX.Element {
-  const [params, setParams] = useSearchParams();
-  const initialToken = params.get("token") ?? "";
+  const search = useSearch({ from: routes.verifyEmail });
+  const initialToken = search.token ?? "";
   const navigate = useNavigate();
   const verifyEmail = useVerifyEmail();
   const autoSubmitRef = useRef(false);
@@ -51,19 +51,15 @@ export function VerifyEmailPage(): JSX.Element {
         try {
           await verifyEmail.mutateAsync({ token: values.token });
           toast.success("Email verified — please sign in.");
-          if (params.has("token")) {
-            params.delete("token");
-            setParams(params, { replace: true });
-          }
           reset({ token: "" });
-          navigate(routes.login, { replace: true });
+          void navigate({ to: routes.login, replace: true });
         } catch (error) {
           toast.error(
             formatApiError(error, "We couldn't verify that token."),
           );
         }
       }),
-    [handleSubmit, navigate, params, reset, setParams, verifyEmail],
+    [handleSubmit, navigate, reset, verifyEmail],
   );
 
   useEffect(() => {
@@ -76,7 +72,7 @@ export function VerifyEmailPage(): JSX.Element {
   useEffect(() => {
     if (me.data?.user.email_verified === true) {
       toast.success("Email verified.");
-      navigate(routes.repos, { replace: true });
+      void navigate({ to: routes.repos, replace: true });
     }
   }, [me.data, navigate]);
 

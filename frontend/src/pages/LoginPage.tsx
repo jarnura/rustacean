@@ -3,7 +3,7 @@
 // account still needs verification.
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useLogin } from "@/api";
 import { AuthLayout } from "@/components/auth/AuthLayout";
@@ -30,11 +30,11 @@ export function LoginPage(): JSX.Element {
       const result = await login.mutateAsync(values);
       if (result.email_verification_required) {
         toast.message("Verify your email to continue.");
-        navigate(routes.verifyEmail, { replace: true });
+        void navigate({ to: routes.verifyEmail, replace: true });
         return;
       }
       toast.success("Signed in.");
-      navigate(routes.repos, { replace: true });
+      void navigate({ to: routes.repos, replace: true });
     } catch (error) {
       toast.error(
         formatApiError(error, "Login failed. Please try again."),

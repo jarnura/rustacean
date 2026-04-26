@@ -1,6 +1,25 @@
 # Rustacean Frontend
 
-React 18 + Vite + TypeScript control-plane UI for Rustacean.
+React 18 + Vite + TypeScript + Tailwind CSS + shadcn/ui control-plane UI for
+Rustacean. Routing uses TanStack Router; data fetching uses TanStack Query.
+
+## REQ-FE-01 — Application shell
+
+- **Routing**: [TanStack Router](https://tanstack.com/router) with a code-based
+  route tree in `src/router.tsx` and a single `__root` route that renders the
+  global `<AppShell>` layout via `<Outlet>`.
+- **Layout**: `src/components/AppShell.tsx` provides the header (brand,
+  theme toggle), main content area, and footer.
+- **Theming**: light / dark / system. `ThemeProvider`
+  (`src/components/theme/ThemeProvider.tsx`) toggles the `dark` class on
+  `<html>` and persists the choice in `localStorage`. The Tailwind config
+  uses `darkMode: ["class"]`.
+- **Styling**: Tailwind CSS with shadcn/ui design tokens
+  (`src/index.css`, `tailwind.config.ts`). `cn()` helper in `src/lib/utils.ts`.
+  shadcn/ui components live under `src/components/ui/`.
+- **Resilience**: a top-level `ErrorBoundary` (from `react-error-boundary`)
+  with `AppErrorFallback` wraps the whole tree. A `<Suspense>` boundary
+  inside the root route renders `GlobalSuspenseFallback` while routes load.
 
 ## REQ-FE-10 — OpenAPI client (this package's scope)
 

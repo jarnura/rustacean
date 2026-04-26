@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useResetPassword } from "@/api";
 import { AuthLayout } from "@/components/auth/AuthLayout";
@@ -18,8 +18,8 @@ import {
 } from "@/lib/validation/auth";
 
 export function ResetPasswordPage(): JSX.Element {
-  const [params] = useSearchParams();
-  const tokenFromUrl = params.get("token") ?? "";
+  const search = useSearch({ from: routes.resetPassword });
+  const tokenFromUrl = search.token ?? "";
   const navigate = useNavigate();
   const resetPassword = useResetPassword();
   const {
@@ -49,7 +49,7 @@ export function ResetPasswordPage(): JSX.Element {
         new_password: values.new_password,
       });
       toast.success("Password updated — please sign in.");
-      navigate(routes.login, { replace: true });
+      void navigate({ to: routes.login, replace: true });
     } catch (error) {
       toast.error(
         formatApiError(error, "We couldn't reset your password."),

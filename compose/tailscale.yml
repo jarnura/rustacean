@@ -1,0 +1,51 @@
+# compose/tailscale.yml — Overlay for Tailscale deployment on mars (100.87.157.74)
+#
+# Usage:
+#   docker compose --env-file compose/tailscale.env -f compose/dev.yml -f compose/tailscale.yml up -d
+#
+# What this overlay adds:
+#   - restart: unless-stopped on all long-running services (survives reboots)
+#   - Port remapping is handled by tailscale.env via env-var substitution in dev.yml
+#   - kafka-init is intentionally excluded (one-shot container, must not restart)
+
+name: rustbrain-dev
+
+services:
+  postgres:
+    restart: unless-stopped
+
+  neo4j:
+    restart: unless-stopped
+
+  qdrant:
+    restart: unless-stopped
+
+  kafka:
+    restart: unless-stopped
+
+  otel-collector:
+    restart: unless-stopped
+
+  tempo:
+    restart: unless-stopped
+
+  prometheus:
+    restart: unless-stopped
+
+  grafana:
+    restart: unless-stopped
+
+  ollama:
+    restart: unless-stopped
+
+  control-api:
+    restart: unless-stopped
+
+  caddy:
+    restart: unless-stopped
+
+  pgweb:
+    restart: unless-stopped
+
+  kafka-ui:
+    restart: unless-stopped

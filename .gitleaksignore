@@ -2,3 +2,6 @@
 # "abc123def456" in verify_email unit tests is a structural fixture, not a credential.
 2d8ce207aa40d39a794f68fd2ec0376f34edbc5d:services/control-api/src/routes/auth.rs:generic-api-key:506
 2d8ce207aa40d39a794f68fd2ec0376f34edbc5d:services/control-api/src/routes/auth.rs:generic-api-key:508
+# Documentation example response body for POST /v1/api-keys; replaced with EXAMPLE
+# placeholder in commit 0298c3f, but original commit ce846456 still trips the scanner.
+ce846456bb201bbf2b7c66cdaff4315ff4f9defe:docs/api-reference.md:generic-api-key:320

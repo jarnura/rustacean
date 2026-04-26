@@ -1,0 +1,223 @@
+# Getting Started
+
+This guide takes you from zero to a running rust-brain dev environment with a verified user account.
+
+---
+
+## Prerequisites
+
+| Tool | Minimum version | Install |
+|------|----------------|---------|
+| Docker | 24.x + Compose V2 | https://docs.docker.com/get-docker/ |
+| Rust | 1.85 | `curl https://sh.rustup.rs -sSf \| sh` |
+| Node.js | 20 LTS | https://nodejs.org/ |
+| Git | any recent | system package manager |
+
+Verify your environment:
+
+```bash
+docker compose version   # should print v2.x
+rustc --version          # should print 1.85 or later
+node --version           # should print v20 or later
+```
+
+---
+
+## 1. Clone the repository
+
+```bash
+git clone https://github.com/jarnura/rustacean.git
+cd rustacean
+```
+
+---
+
+## 2. Start the infrastructure stack
+
+`compose/dev.yml` defines every service the application needs — PostgreSQL, Kafka, Neo4j, Qdrant, OpenTelemetry Collector, Tempo, Prometheus, Grafana, Ollama, Caddy, pgweb, Kafka UI, and the control-api itself.
+
+```bash
+docker compose -f compose/dev.yml up -d
+```
+
+Wait for services to become healthy (about 30–60 seconds):
+
+```bash
+docker compose -f compose/dev.yml ps
+```
+
+All services should show `healthy` or `running`. Postgres and Kafka take the longest.
+
+### Verifying infrastructure health
+
+```bash
+# Postgres
+docker compose -f compose/dev.yml exec postgres pg_isready -U rustbrain
+
+# Kafka
+docker compose -f compose/dev.yml exec kafka \
+  kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+# control-api
+curl -s http://localhost:8080/health | jq .
+# → {"status":"ok"}
+```
+
+---
+
+## 3. Run database migrations
+
+The `migrate` service runs SQL migrations against the `control` schema and creates required Kafka topics. Run it once after first boot and after any schema-changing PR is merged:
+
+```bash
+RB_DATABASE_URL=postgres://rustbrain:rustbrain@localhost:5432/rustbrain \
+  cargo run -p migrate -- up
+```
+
+You should see output like:
+
+```
+[migrate] running control schema migrations...
+[migrate] applied: 20240101_create_control_schema.sql
+...
+[migrate] all migrations applied
+```
+
+To check current migration state:
+
+```bash
+RB_DATABASE_URL=postgres://rustbrain:rustbrain@localhost:5432/rustbrain \
+  cargo run -p migrate -- status
+```
+
+---
+
+## 4. Configure environment variables
+
+The control-api reads configuration from environment variables. The Docker Compose file sets defaults suitable for local development — you only need to override them for custom setups.
+
+For running the API **outside Docker** (e.g. `cargo run`), create a `.env` file or export the following:
+
+```bash
+export RB_DATABASE_URL=postgres://rustbrain:rustbrain@localhost:5432/rustbrain
+export RB_LISTEN_ADDR=0.0.0.0:8080
+export RB_BASE_URL=http://localhost:8080
+export RB_CORS_ORIGINS=http://localhost:5173
+export RB_EMAIL_TRANSPORT=console        # prints emails to stdout
+export RUST_LOG=info,control_api=debug
+```
+
+Full variable reference: [docs/api-reference.md — Environment Variables](api-reference.md#environment-variables).
+
+---
+
+## 5. Start the frontend dev server
+
+The frontend is a React 18 + Vite app in `frontend/`. It proxies `/v1`, `/health`, and `/ready` to the control-api.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The dev server starts at `http://localhost:5173`.
+
+If the API is running on a different address, override the proxy target:
+
+```bash
+# frontend/.env.local
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+---
+
+## 6. Verify it works: sign up → verify → log in
+
+### Option A — using the UI
+
+1. Open `http://localhost:5173` in your browser.
+2. Click **Sign up** and fill in email, password (min 12 chars), and a workspace name.
+3. Check the control-api logs for the verification email link (transport is `console` in dev):
+   ```bash
+   docker compose -f compose/dev.yml logs control-api | grep "verify-email"
+   ```
+4. Copy the `?token=...` value and POST it:
+   ```bash
+   curl -s -X POST http://localhost:8080/v1/auth/verify-email \
+     -H 'Content-Type: application/json' \
+     -d '{"token":"<token-from-log>"}'
+   # → 204 No Content
+   ```
+5. Log in at `http://localhost:5173/login` — you should land on the repositories page.
+
+### Option B — curl end-to-end
+
+```bash
+# Sign up
+curl -s -c cookies.txt -X POST http://localhost:8080/v1/auth/signup \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "email": "alice@example.com",
+    "password": "correct-horse-battery",
+    "tenant_name": "Acme Corp"
+  }' | jq .
+# → {"email_verification_required":true,"user_id":"<uuid>"}
+
+# Grab the verification token from API logs
+docker compose -f compose/dev.yml logs control-api 2>&1 | grep verify-email | tail -1
+
+# Verify email
+curl -s -X POST http://localhost:8080/v1/auth/verify-email \
+  -H 'Content-Type: application/json' \
+  -d '{"token":"<token>"}' -o /dev/null -w "%{http_code}"
+# → 204
+
+# Log in
+curl -s -c cookies.txt -X POST http://localhost:8080/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"alice@example.com","password":"correct-horse-battery"}' | jq .
+# → {"user_id":"...","tenant_id":"...","email_verification_required":false}
+
+# Fetch your profile
+curl -s -b cookies.txt http://localhost:8080/v1/me | jq .
+```
+
+---
+
+## Tailscale remote dev (mars)
+
+If you are developing against the `mars` host (Tailscale IP `100.87.157.74`) instead of running Docker locally, the stack is already running with remapped ports. See [docs/PORT_MAP.md](PORT_MAP.md) for the full port table.
+
+Start or restart the remote stack:
+
+```bash
+docker compose --env-file compose/tailscale.env \
+  -f compose/dev.yml -f compose/tailscale.yml up -d
+```
+
+Key remote URLs:
+
+| Service | URL |
+|---------|-----|
+| Control API | `http://100.87.157.74:18080` |
+| Grafana | `http://100.87.157.74:13000` |
+| pgweb (DB browser) | `http://100.87.157.74:18081` |
+| Kafka UI | `http://100.87.157.74:18082` |
+| Prometheus | `http://100.87.157.74:19090` |
+
+When targeting the remote API, set your frontend proxy:
+
+```bash
+# frontend/.env.local
+VITE_API_BASE_URL=http://100.87.157.74:18080
+```
+
+---
+
+## Next steps
+
+- **Architecture deep-dive**: [docs/architecture.md](architecture.md)
+- **Ops reference**: [docs/runbook.md](runbook.md)
+- **API reference**: [docs/api-reference.md](api-reference.md)
+- **Contributing**: [CONTRIBUTING.md](../CONTRIBUTING.md)

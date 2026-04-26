@@ -324,10 +324,7 @@ fn json_body(v: &serde_json::Value) -> Body {
     Body::from(serde_json::to_vec(v).expect("serialise JSON"))
 }
 
-/// Full login flow: signup → SQL-verify email → login → assert Secure cookie.
-///
-/// Uses `email_verified_at` SQL patch because the noop transport discards the
-/// verification email; the verify-email endpoint itself is covered by RUSAA-30.
+/// signup → SQL-verify email → login → assert Secure cookie present.
 #[tokio::test]
 async fn integration_login_full_flow() {
     let Some((state, pool)) = real_db_state().await else {
@@ -337,7 +334,6 @@ async fn integration_login_full_flow() {
     let email = format!("integ-login-{}@test.example", Uuid::new_v4().simple());
     let password = "correct-horse-battery-staple";
 
-    // 1. Signup
     let resp = app
         .clone()
         .oneshot(
@@ -356,14 +352,13 @@ async fn integration_login_full_flow() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED, "signup must return 201");
 
-    // 2. Patch email_verified_at directly (noop transport discards the email)
+    // noop transport discards the email — patch verified_at directly
     sqlx::query("UPDATE control.users SET email_verified_at = NOW() WHERE email = $1")
         .bind(&email)
         .execute(&pool)
         .await
         .expect("email verification patch must succeed");
 
-    // 3. Login
     let resp = app
         .clone()
         .oneshot(
@@ -475,3 +470,41 @@ async fn integration_login_rate_limit() {
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS, "6th attempt must be rate-limited");
 }
 
+/// Signup response must set `rb_session` cookie with Secure + `HttpOnly` flags.
+#[tokio::test]
+async fn integration_signup_cookie_has_secure_flag() {
+    let Some((state, _pool)) = real_db_state().await else {
+        return;
+    };
+    let app = build(state);
+    let email = format!("integ-signup-secure-{}@test.example", Uuid::new_v4().simple());
+    let password = "correct-horse-battery-staple";
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/signup")
+                .header("content-type", "application/json")
+                .body(json_body(&serde_json::json!({
+                    "email": email,
+                    "password": password,
+                    "tenant_name": "Secure Cookie Test Tenant",
+                })))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::CREATED, "signup must return 201");
+
+    let cookie = resp
+        .headers()
+        .get("set-cookie")
+        .expect("Set-Cookie header must be present on signup")
+        .to_str()
+        .unwrap();
+    assert!(cookie.contains("rb_session="), "cookie must contain rb_session token");
+    assert!(cookie.contains("Secure"), "signup cookie must carry the Secure flag");
+    assert!(cookie.contains("HttpOnly"), "signup cookie must carry HttpOnly");
+}

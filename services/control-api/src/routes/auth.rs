@@ -368,6 +368,124 @@ pub async fn reset_password(
     Ok(StatusCode::NO_CONTENT)
 }
 
+// ---------------------------------------------------------------------------
+// POST /v1/auth/login
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct LoginRequest {
+    /// RFC 5322 email address.
+    pub email: String,
+    /// Plaintext password.
+    pub password: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct LoginResponse {
+    pub user_id: Uuid,
+    pub tenant_id: Uuid,
+    /// `true` when `email_verified_at IS NULL` — caller should redirect to verification.
+    pub email_verification_required: bool,
+}
+
+/// Authenticate with email and password, creating a new session.
+///
+/// Verifies credentials with argon2id, creates a 30-day sliding-expiry session,
+/// and sets an `HttpOnly` `rb_session` cookie. Rate-limited to 5 failures per
+/// 10-minute window; exceeding the threshold returns 429 for 15 minutes.
+#[utoipa::path(
+    post,
+    path = "/v1/auth/login",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Authenticated", body = LoginResponse),
+        (status = 401, description = "Invalid credentials (invalid_credentials)"),
+        (status = 403, description = "Account suspended (account_suspended)"),
+        (status = 429, description = "Rate-limited (rate_limited)"),
+    ),
+    tag = "auth"
+)]
+pub async fn login(
+    State(state): State<AppState>,
+    Json(body): Json<LoginRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    state.login_rate_limiter.check(&body.email)?;
+
+    let row: Option<(Uuid, String, bool, String, Uuid)> = sqlx::query_as(
+        "SELECT u.id, u.password_hash, (u.email_verified_at IS NOT NULL), u.status, tm.tenant_id \
+         FROM control.users u \
+         JOIN control.tenant_members tm ON tm.user_id = u.id \
+         JOIN control.tenants t ON t.id = tm.tenant_id \
+         WHERE u.email = $1 AND t.status = 'active' \
+         ORDER BY tm.joined_at ASC \
+         LIMIT 1",
+    )
+    .bind(&body.email)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let Some((user_id, password_hash, email_verified, user_status, tenant_id)) = row else {
+        // Dummy hash keeps timing indistinguishable from the found path.
+        let _ = state.hasher.hash("dummy-timing-equalizer-password-xx");
+        state.login_rate_limiter.record_attempt(&body.email, false);
+        return Err(AppError::InvalidCredentials);
+    };
+
+    let password_ok = state.hasher.verify(&body.password, &password_hash)?;
+    if !password_ok {
+        state.login_rate_limiter.record_attempt(&body.email, false);
+        return Err(AppError::InvalidCredentials);
+    }
+
+    if user_status == "suspended" {
+        return Err(AppError::AccountSuspended);
+    }
+
+    state.login_rate_limiter.record_attempt(&body.email, true);
+
+    let session_token = SessionToken::generate();
+    let session_id = Uuid::new_v4();
+    let session_expires_at = Utc::now() + Duration::days(state.config.session_ttl_days);
+
+    let mut tx = state.pool.begin().await?;
+
+    sqlx::query(
+        "INSERT INTO control.sessions (id, user_id, tenant_id, token_hash, expires_at) \
+         VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(session_id)
+    .bind(user_id)
+    .bind(tenant_id)
+    .bind(session_token.hash())
+    .bind(session_expires_at)
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO control.auth_events (user_id, tenant_id, event) VALUES ($1, $2, 'login')",
+    )
+    .bind(user_id)
+    .bind(tenant_id)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    let cookie = format!(
+        "rb_session={}; HttpOnly; SameSite=Lax; Path=/",
+        session_token.as_str()
+    );
+    Ok((
+        StatusCode::OK,
+        [("Set-Cookie", cookie)],
+        Json(LoginResponse {
+            user_id,
+            tenant_id,
+            email_verification_required: !email_verified,
+        }),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -421,5 +539,47 @@ mod tests {
         let slug = derive_slug("MyTenant", id);
         let suffix = &id.simple().to_string()[..6];
         assert!(slug.ends_with(suffix));
+    }
+
+    #[test]
+    fn login_request_deserializes() {
+        let json = r#"{"email":"user@example.com","password":"correct-horse-battery"}"#;
+        let req: LoginRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.email, "user@example.com");
+        assert_eq!(req.password, "correct-horse-battery");
+    }
+
+    #[test]
+    fn login_response_serializes_all_fields() {
+        let resp = LoginResponse {
+            user_id: Uuid::new_v4(),
+            tenant_id: Uuid::new_v4(),
+            email_verification_required: true,
+        };
+        let v = serde_json::to_value(&resp).unwrap();
+        assert!(v["user_id"].is_string());
+        assert!(v["tenant_id"].is_string());
+        assert_eq!(v["email_verification_required"], true);
+    }
+
+    #[test]
+    fn invalid_credentials_maps_to_401() {
+        let err = AppError::InvalidCredentials;
+        let resp = err.into_response();
+        assert_eq!(resp.status(), axum::http::StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn account_suspended_maps_to_403() {
+        let err = AppError::AccountSuspended;
+        let resp = err.into_response();
+        assert_eq!(resp.status(), axum::http::StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn login_request_rejects_missing_password() {
+        let json = r#"{"email":"user@example.com"}"#;
+        let result: serde_json::Result<LoginRequest> = serde_json::from_str(json);
+        assert!(result.is_err());
     }
 }

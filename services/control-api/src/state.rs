@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use rb_auth::PasswordHasher;
+use rb_auth::{LoginRateLimiter, PasswordHasher};
 use rb_email::EmailSender;
 use sqlx::PgPool;
 
@@ -12,5 +12,6 @@ pub struct AppState {
     pub pool: PgPool,
     pub email_sender: Arc<dyn EmailSender>,
     pub hasher: Arc<PasswordHasher>,
+    pub login_rate_limiter: Arc<LoginRateLimiter>,
     pub config: Arc<Config>,
 }

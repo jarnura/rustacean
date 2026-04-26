@@ -5,7 +5,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use http_body_util::BodyExt as _;
-use rb_auth::PasswordHasher;
+use rb_auth::{LoginRateLimiter, PasswordHasher};
 use rb_email::from_transport;
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt as _;
@@ -31,6 +31,7 @@ fn test_state() -> AppState {
         pool,
         email_sender: Arc::from(email_sender),
         hasher: Arc::new(hasher),
+        login_rate_limiter: Arc::new(LoginRateLimiter::new()),
         config: Arc::new(config),
     }
 }

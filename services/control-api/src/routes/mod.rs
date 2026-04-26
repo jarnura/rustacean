@@ -6,7 +6,7 @@ pub mod tenants;
 use axum::{Router, routing::{delete, get, post, put}};
 
 use crate::routes::{
-    auth::{forgot_password, reset_password, signup},
+    auth::{forgot_password, login, reset_password, signup},
     health::{health_check, openapi_json, ready_check},
     me::switch_tenant,
     tenants::{invite_member, remove_member, transfer_ownership, update_member_role},
@@ -20,6 +20,7 @@ pub fn build(state: AppState) -> Router {
         .route("/ready", get(ready_check))
         .route("/openapi.json", get(openapi_json))
         .route("/v1/auth/signup", post(signup))
+        .route("/v1/auth/login", post(login))
         .route("/v1/auth/forgot-password", post(forgot_password))
         .route("/v1/auth/reset-password", post(reset_password))
         .route("/v1/me/switch-tenant", post(switch_tenant))

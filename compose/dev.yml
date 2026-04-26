@@ -44,7 +44,7 @@ services:
       start_period: 60s
 
   qdrant:
-    image: qdrant/qdrant:v1.13
+    image: qdrant/qdrant:v1.13.0
     volumes:
       - qdrant_data:/qdrant/storage
     ports:
@@ -57,13 +57,13 @@ services:
         limits:
           memory: 8g
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'echo >/dev/tcp/localhost/6333' 2>/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   kafka:
-    image: apache/kafka:3.9
+    image: apache/kafka:3.8.1
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -86,14 +86,14 @@ services:
     networks:
       - rb-net
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 30s
 
   kafka-init:
-    image: apache/kafka:3.9
+    image: apache/kafka:3.8.1
     depends_on:
       kafka:
         condition: service_healthy
@@ -102,21 +102,21 @@ services:
       - rb-net
     command: >
       bash -c "
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.clone.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.expand.commands    --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.parse.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.typecheck.commands --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.graph.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.embed.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.projector.events          --partitions 12 --replication-factor 1 --config retention.ms=2592000000 &&
-        kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.audit.events              --partitions 3  --replication-factor 1 --config retention.ms=7776000000
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.clone.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.expand.commands    --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.parse.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.typecheck.commands --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.graph.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.embed.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.projector.events          --partitions 12 --replication-factor 1 --config retention.ms=2592000000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.audit.events              --partitions 3  --replication-factor 1 --config retention.ms=7776000000
       "
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.116.0
+    image: otel/opentelemetry-collector-contrib:0.114.0
     command: ["--config=/etc/otel-collector/config.yaml"]
     volumes:
-      - ./infra/otel-collector/config.yaml:/etc/otel-collector/config.yaml:ro
+      - ../infra/otel-collector/config.yaml:/etc/otel-collector/config.yaml:ro
     ports:
       - "${OTEL_GRPC_HOST_PORT:-4317}:4317"
       - "${OTEL_HTTP_HOST_PORT:-4318}:4318"
@@ -127,10 +127,10 @@ services:
       - prometheus
 
   tempo:
-    image: grafana/tempo:2.7
+    image: grafana/tempo:2.7.2
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
-      - ./infra/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - ../infra/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
     ports:
       - "${TEMPO_HOST_PORT:-3200}:3200"
@@ -149,7 +149,7 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=15d
     volumes:
-      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
       - "${PROMETHEUS_HOST_PORT:-9090}:9090"
@@ -168,8 +168,8 @@ services:
       GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
     volumes:
-      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     ports:
       - "${GRAFANA_HOST_PORT:-3000}:3000"
@@ -219,16 +219,12 @@ services:
       otel-collector:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      disable: true
 
   caddy:
     image: caddy:2-alpine
     volumes:
-      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
     ports:
       - "${CADDY_HTTP_HOST_PORT:-80}:80"

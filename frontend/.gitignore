@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-ssr
+*.local
+.vite
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+coverage
+.eslintcache
+*.tsbuildinfo

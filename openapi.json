@@ -1,0 +1,1101 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "rust-brain control API",
+    "description": "Control-plane API for rust-brain: auth, tenant management, and API key endpoints.",
+    "contact": {
+      "name": "rust-brain",
+      "url": "https://github.com/jarnura/rustacean"
+    },
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness probe — always returns 200 while the process is running.",
+        "operationId": "health_check",
+        "responses": {
+          "200": {
+            "description": "Service is alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Readiness probe — returns 200 when the service is ready to serve traffic.",
+        "description": "Full DB connectivity check is wired in RUSAA-38; currently mirrors the\nliveness probe so health and ready endpoints can be tested immediately.",
+        "operationId": "ready_check",
+        "responses": {
+          "200": {
+            "description": "Service is ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service is not ready"
+          }
+        }
+      }
+    },
+    "/v1/api-keys": {
+      "get": {
+        "tags": [
+          "api_keys"
+        ],
+        "summary": "List all active (non-revoked) API keys for the current session's tenant.",
+        "description": "Plaintext keys are never returned — only metadata.\nRequires an active session.",
+        "operationId": "list_api_keys",
+        "responses": {
+          "200": {
+            "description": "List of active API keys",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListApiKeysResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "api_keys"
+        ],
+        "summary": "Create a new API key for the current session's tenant.",
+        "description": "The plaintext key is returned exactly once in the `key` field.\nSubsequent reads from `GET /v1/api-keys` will not include the plaintext.\nRequires an active session.",
+        "operationId": "create_api_key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApiKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "API key created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateApiKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or empty name or scopes"
+          },
+          "401": {
+            "description": "Not authenticated (unauthorized)"
+          }
+        }
+      }
+    },
+    "/v1/api-keys/{id}": {
+      "delete": {
+        "tags": [
+          "api_keys"
+        ],
+        "summary": "Revoke an API key.",
+        "description": "Any authenticated member of the tenant may revoke any key belonging to\nthat tenant. Revocation is immediate and irreversible.\nRequires an active session.",
+        "operationId": "revoke_api_key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "API key ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Key revoked"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Key not found or already revoked"
+          }
+        }
+      }
+    },
+    "/v1/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Request a password-reset email.",
+        "description": "Always returns 200 OK regardless of whether the address is registered,\npreventing email enumeration. When found, a reset link with a 15-minute\nexpiry is emailed. When not found, a dummy argon2id hash is performed to\nkeep the response time within ±50ms of a real lookup.",
+        "operationId": "forgot_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Reset email sent or silently skipped"
+          }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Authenticate with email and password, creating a new session.",
+        "description": "Verifies credentials with argon2id, creates a 30-day sliding-expiry session,\nand sets an `HttpOnly` `rb_session` cookie. Rate-limited to 5 failures per\n10-minute window; exceeding the threshold returns 429 for 15 minutes.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials (invalid_credentials)"
+          },
+          "403": {
+            "description": "Account suspended (account_suspended)"
+          },
+          "429": {
+            "description": "Rate-limited (rate_limited)"
+          }
+        }
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Revoke the caller's current session and clear the `rb_session` cookie.",
+        "description": "Sets `revoked_at = now()` on the session row, writes a `logout` row to\n`control.auth_events` for audit, and returns `204 No Content` with a\n`Set-Cookie` header that overwrites `rb_session` with `Max-Age=0` so the\nbrowser drops it. Requires an authenticated session — anonymous and\nAPI-key callers receive `401 unauthorized`.",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "Session revoked and cookie cleared"
+          },
+          "401": {
+            "description": "No active session (unauthorized)"
+          }
+        }
+      }
+    },
+    "/v1/auth/reset-password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Consume a reset token and set a new password.",
+        "description": "Marks the token used, updates the password hash, and revokes **all** active\nsessions for the user. The caller must re-authenticate after resetting.",
+        "operationId": "reset_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Password updated and all sessions revoked"
+          },
+          "400": {
+            "description": "Expired/used token (invalid_token) or short password (weak_password)"
+          }
+        }
+      }
+    },
+    "/v1/auth/signup": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Register a new user and create their first tenant workspace.",
+        "operationId": "signup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "User and tenant created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Weak password (weak_password) or invalid email (invalid_email)"
+          },
+          "409": {
+            "description": "Email already registered (email_taken)"
+          }
+        }
+      }
+    },
+    "/v1/auth/verify-email": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Verify an email address using a single-use token.",
+        "description": "Accepts the plaintext token from the verification email, looks up its\nSHA-256 hash in `email_tokens`, validates that it is unused and unexpired,\nthen sets `users.email_verified_at` and marks the token used. An\n`email_verified` auth event is written atomically in the same transaction.",
+        "operationId": "verify_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Email successfully verified"
+          },
+          "400": {
+            "description": "Token expired, already used, or not found (invalid_token)"
+          }
+        }
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Return the authenticated user's profile, current tenant, and available\ntenants. As a side-effect, refreshes the session's `last_seen_at` and\nextends `expires_at` by `session_ttl_days` so the session is sliding\nrather than fixed-from-login. The refresh is fire-and-forget — failing\nto extend the session does not fail the request (see REQ-AU-06).",
+        "operationId": "get_me",
+        "responses": {
+          "200": {
+            "description": "Current user profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated, or session expired (`session_expired`)"
+          },
+          "403": {
+            "description": "Email not verified (`email_not_verified`)"
+          }
+        }
+      }
+    },
+    "/v1/me/switch-tenant": {
+      "post": {
+        "tags": [
+          "me"
+        ],
+        "summary": "Switch the active tenant for the current session.",
+        "description": "The caller must already be a member of the target tenant. The session's\n`tenant_id` is updated in place and a `tenant_switched` auth event is\nwritten. Returns the new active tenant with the caller's role.\nRequires: verified session.",
+        "operationId": "switch_tenant",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchTenantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tenant switched",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchTenantResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Email not verified (email_not_verified) or not a member (not_a_member)"
+          },
+          "404": {
+            "description": "Target tenant not found or inactive"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{id}/members": {
+      "post": {
+        "tags": [
+          "tenants"
+        ],
+        "summary": "Invite a user to this tenant by email.",
+        "description": "If the user already has an account they are added immediately with the\n`member` role. If they do not yet have an account, an invite email is sent\nwith a signup link.\nRequires: session with admin or owner role in the target tenant.",
+        "operationId": "invite_member",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Member added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteMemberResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Invite email sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteMemberResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated (unauthorized)"
+          },
+          "403": {
+            "description": "Not a member or insufficient role (not_a_member / insufficient_role)"
+          },
+          "409": {
+            "description": "Already a member (already_member)"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{id}/members/{uid}": {
+      "delete": {
+        "tags": [
+          "tenants"
+        ],
+        "summary": "Remove a member from a tenant.",
+        "description": "Cannot remove the owner. The removed member's active sessions for this\ntenant are immediately revoked.\nRequires: session with admin or owner role.",
+        "operationId": "remove_member",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "description": "User ID of the member to remove",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Member removed"
+          },
+          "400": {
+            "description": "Cannot remove owner (cannot_remove_owner)"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Insufficient role (insufficient_role)"
+          },
+          "404": {
+            "description": "Member not found"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{id}/members/{uid}/role": {
+      "put": {
+        "tags": [
+          "tenants"
+        ],
+        "summary": "Change a member's role within a tenant.",
+        "description": "Requires: session with admin or owner role.\nCannot change the owner's role — use transfer-ownership for that.\nCannot set `owner` as the new role — use transfer-ownership.",
+        "operationId": "update_member_role",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "description": "User ID of the member to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Role updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateRoleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot demote owner (cannot_remove_owner) or invalid role"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Insufficient role (insufficient_role)"
+          },
+          "404": {
+            "description": "Member not found"
+          }
+        }
+      }
+    },
+    "/v1/tenants/{id}/transfer-ownership": {
+      "post": {
+        "tags": [
+          "tenants"
+        ],
+        "summary": "Transfer the owner role to another existing member.",
+        "description": "Atomically sets the current owner to `admin` and the target to `owner`.\nThe target must already be a member of the tenant.\nRequires: session with owner role.",
+        "operationId": "transfer_ownership",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferOwnershipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Ownership transferred"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Insufficient role — must be owner (insufficient_role)"
+          },
+          "404": {
+            "description": "Target user is not a member"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiKeyItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "scopes",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "last_used_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          }
+        }
+      },
+      "CreateApiKeyRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Human-readable label for the key."
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            },
+            "description": "Scopes the key is authorized to use."
+          }
+        }
+      },
+      "CreateApiKeyResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "name",
+          "scopes",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string",
+            "description": "Plaintext key — shown exactly once. Store it securely; it cannot be retrieved later."
+          },
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Scope"
+            }
+          }
+        }
+      },
+      "CurrentTenant": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "role"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address for the account to recover."
+          }
+        }
+      },
+      "InviteMemberRequest": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email address of the user to invite or add."
+          }
+        }
+      },
+      "InviteMemberResponse": {
+        "type": "object",
+        "required": [
+          "invited",
+          "email",
+          "role"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "invited": {
+            "type": "boolean",
+            "description": "`true` when the invite email was sent (user did not have an existing account)."
+          },
+          "role": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Present when an existing user was added directly."
+          }
+        }
+      },
+      "ListApiKeysResponse": {
+        "type": "object",
+        "required": [
+          "keys"
+        ],
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyItem"
+            }
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "RFC 5322 email address."
+          },
+          "password": {
+            "type": "string",
+            "description": "Plaintext password."
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "tenant_id",
+          "email_verification_required"
+        ],
+        "properties": {
+          "email_verification_required": {
+            "type": "boolean",
+            "description": "`true` when `email_verified_at IS NULL` — caller should redirect to verification."
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "MeResponse": {
+        "type": "object",
+        "description": "Response body of `GET /v1/me`: who the caller is, what tenant they are\ncurrently scoped to, and every other tenant available to them.",
+        "required": [
+          "user",
+          "current_tenant",
+          "available_tenants"
+        ],
+        "properties": {
+          "available_tenants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TenantWithRole"
+            }
+          },
+          "current_tenant": {
+            "$ref": "#/components/schemas/TenantWithRole"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserInfo"
+          }
+        }
+      },
+      "ProbeResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "properties": {
+          "new_password": {
+            "type": "string",
+            "description": "New password; minimum 12 characters."
+          },
+          "token": {
+            "type": "string",
+            "description": "Plaintext reset token from the emailed link."
+          }
+        }
+      },
+      "Scope": {
+        "type": "string",
+        "description": "Access scope for an API key.",
+        "enum": [
+          "read",
+          "write",
+          "admin"
+        ]
+      },
+      "SignupRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "password",
+          "tenant_name"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "RFC 5322 email address."
+          },
+          "password": {
+            "type": "string",
+            "description": "Plaintext password, minimum 12 characters."
+          },
+          "tenant_name": {
+            "type": "string",
+            "description": "Display name for the new tenant workspace."
+          }
+        }
+      },
+      "SignupResponse": {
+        "type": "object",
+        "required": [
+          "email_verification_required",
+          "user_id"
+        ],
+        "properties": {
+          "email_verification_required": {
+            "type": "boolean",
+            "description": "Always `true` on signup — email verification required before tenant access."
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "SwitchTenantRequest": {
+        "type": "object",
+        "required": [
+          "tenant_id"
+        ],
+        "properties": {
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID of the tenant to switch to."
+          }
+        }
+      },
+      "SwitchTenantResponse": {
+        "type": "object",
+        "required": [
+          "current_tenant"
+        ],
+        "properties": {
+          "current_tenant": {
+            "$ref": "#/components/schemas/CurrentTenant"
+          }
+        }
+      },
+      "TenantWithRole": {
+        "type": "object",
+        "description": "One tenant the caller is a member of, with their role.",
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "role"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
+      "TransferOwnershipRequest": {
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User ID of the existing member to promote to owner."
+          }
+        }
+      },
+      "UpdateRoleRequest": {
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "Target role: `member` or `admin`. Cannot set `owner` via this endpoint."
+          }
+        }
+      },
+      "UpdateRoleResponse": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "role"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "UserInfo": {
+        "type": "object",
+        "description": "Public profile of the authenticated user.",
+        "required": [
+          "id",
+          "email",
+          "status",
+          "email_verified",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "email": {
+            "type": "string"
+          },
+          "email_verified": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "VerifyEmailRequest": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Plaintext verification token from the emailed link."
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "health",
+      "description": "Liveness and readiness probes"
+    },
+    {
+      "name": "auth",
+      "description": "Authentication and session management"
+    },
+    {
+      "name": "me",
+      "description": "Current-user and session endpoints"
+    },
+    {
+      "name": "tenants",
+      "description": "Tenant membership and role management"
+    },
+    {
+      "name": "api_keys",
+      "description": "API key management"
+    }
+  ]
+}

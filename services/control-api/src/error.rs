@@ -33,6 +33,10 @@ pub enum AppError {
     NotAMember,
     #[error("user is already a member of this tenant")]
     AlreadyMember,
+    #[error("invalid credentials")]
+    InvalidCredentials,
+    #[error("account suspended")]
+    AccountSuspended,
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
     #[error("auth error: {0}")]
@@ -66,6 +70,12 @@ impl IntoResponse for AppError {
             }
             AppError::NotAMember => (StatusCode::FORBIDDEN, "not_a_member", self.to_string()),
             AppError::AlreadyMember => (StatusCode::CONFLICT, "already_member", self.to_string()),
+            AppError::InvalidCredentials => {
+                (StatusCode::UNAUTHORIZED, "invalid_credentials", self.to_string())
+            }
+            AppError::AccountSuspended => {
+                (StatusCode::FORBIDDEN, "account_suspended", self.to_string())
+            }
             AppError::Database(e) => {
                 tracing::error!(error = %e, "database error");
                 (

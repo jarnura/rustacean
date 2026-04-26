@@ -5,7 +5,7 @@
 
 use utoipa::OpenApi;
 
-use crate::routes::{auth, health, tenants};
+use crate::routes::{auth, health, me, tenants};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -15,6 +15,7 @@ use crate::routes::{auth, health, tenants};
         auth::signup,
         auth::forgot_password,
         auth::reset_password,
+        me::switch_tenant,
         tenants::invite_member,
         tenants::update_member_role,
         tenants::remove_member,
@@ -27,6 +28,9 @@ use crate::routes::{auth, health, tenants};
             auth::SignupResponse,
             auth::ForgotPasswordRequest,
             auth::ResetPasswordRequest,
+            me::SwitchTenantRequest,
+            me::SwitchTenantResponse,
+            me::CurrentTenant,
             tenants::InviteMemberRequest,
             tenants::InviteMemberResponse,
             tenants::UpdateRoleRequest,
@@ -46,6 +50,7 @@ use crate::routes::{auth, health, tenants};
     tags(
         (name = "health", description = "Liveness and readiness probes"),
         (name = "auth", description = "Authentication and session management"),
+        (name = "me", description = "Current-user and session endpoints"),
         (name = "tenants", description = "Tenant membership and role management"),
     ),
 )]

@@ -41,6 +41,8 @@ pub enum AppError {
     InvalidCredentials,
     #[error("account suspended")]
     AccountSuspended,
+    #[error("session expired")]
+    SessionExpired,
     #[error("email address not yet verified")]
     EmailNotVerified,
     #[error("database error: {0}")]
@@ -85,6 +87,9 @@ impl IntoResponse for AppError {
             }
             AppError::AccountSuspended => {
                 (StatusCode::FORBIDDEN, "account_suspended", self.to_string())
+            }
+            AppError::SessionExpired => {
+                (StatusCode::UNAUTHORIZED, "session_expired", self.to_string())
             }
             AppError::EmailNotVerified => {
                 (StatusCode::FORBIDDEN, "email_not_verified", self.to_string())

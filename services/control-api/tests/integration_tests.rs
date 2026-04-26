@@ -195,7 +195,7 @@ async fn verify_email_missing_token_field_returns_422() {
                 .method("POST")
                 .uri("/v1/auth/verify-email")
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{}"#))
+                .body(Body::from("{}"))
                 .unwrap(),
         )
         .await
@@ -320,8 +320,8 @@ async fn real_db_state() -> Option<(AppState, PgPool)> {
     Some((state, pool))
 }
 
-fn json_body(v: serde_json::Value) -> Body {
-    Body::from(serde_json::to_vec(&v).expect("serialise JSON"))
+fn json_body(v: &serde_json::Value) -> Body {
+    Body::from(serde_json::to_vec(v).expect("serialise JSON"))
 }
 
 /// Full login flow: signup → SQL-verify email → login → assert Secure cookie.
@@ -345,7 +345,7 @@ async fn integration_login_full_flow() {
                 .method("POST")
                 .uri("/v1/auth/signup")
                 .header("content-type", "application/json")
-                .body(json_body(serde_json::json!({
+                .body(json_body(&serde_json::json!({
                     "email": email,
                     "password": password,
                     "tenant_name": "Integration Login Tenant",
@@ -371,7 +371,7 @@ async fn integration_login_full_flow() {
                 .method("POST")
                 .uri("/v1/auth/login")
                 .header("content-type", "application/json")
-                .body(json_body(serde_json::json!({
+                .body(json_body(&serde_json::json!({
                     "email": email,
                     "password": password,
                 })))
@@ -421,7 +421,7 @@ async fn integration_login_rate_limit() {
                 .method("POST")
                 .uri("/v1/auth/signup")
                 .header("content-type", "application/json")
-                .body(json_body(serde_json::json!({
+                .body(json_body(&serde_json::json!({
                     "email": email,
                     "password": password,
                     "tenant_name": "Rate Limit Test Tenant",
@@ -441,7 +441,7 @@ async fn integration_login_rate_limit() {
                     .method("POST")
                     .uri("/v1/auth/login")
                     .header("content-type", "application/json")
-                    .body(json_body(serde_json::json!({
+                    .body(json_body(&serde_json::json!({
                         "email": email,
                         "password": "wrong-password-xyz",
                     })))
@@ -464,7 +464,7 @@ async fn integration_login_rate_limit() {
                 .method("POST")
                 .uri("/v1/auth/login")
                 .header("content-type", "application/json")
-                .body(json_body(serde_json::json!({
+                .body(json_body(&serde_json::json!({
                     "email": email,
                     "password": "wrong-password-xyz",
                 })))

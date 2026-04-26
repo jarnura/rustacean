@@ -51,8 +51,8 @@ async fn real_db_state() -> Option<(AppState, PgPool)> {
     Some((state, pool))
 }
 
-fn json_body(v: serde_json::Value) -> Body {
-    Body::from(serde_json::to_vec(&v).expect("serialise JSON"))
+fn json_body(v: &serde_json::Value) -> Body {
+    Body::from(serde_json::to_vec(v).expect("serialise JSON"))
 }
 
 /// Full logout flow: signup → SQL-verify email → login → logout → assert
@@ -75,7 +75,7 @@ async fn integration_logout_full_flow() {
                 .method("POST")
                 .uri("/v1/auth/signup")
                 .header("content-type", "application/json")
-                .body(json_body(serde_json::json!({
+                .body(json_body(&serde_json::json!({
                     "email": email,
                     "password": password,
                     "tenant_name": "Integration Logout Tenant",
@@ -101,7 +101,7 @@ async fn integration_logout_full_flow() {
                 .method("POST")
                 .uri("/v1/auth/login")
                 .header("content-type", "application/json")
-                .body(json_body(serde_json::json!({
+                .body(json_body(&serde_json::json!({
                     "email": email,
                     "password": password,
                 })))

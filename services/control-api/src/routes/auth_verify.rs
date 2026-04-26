@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn verify_email_request_rejects_missing_token() {
-        let json = r#"{}"#;
+        let json = "{}";
         let result: serde_json::Result<VerifyEmailRequest> = serde_json::from_str(json);
         assert!(result.is_err());
     }

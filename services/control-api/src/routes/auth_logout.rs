@@ -31,6 +31,7 @@ pub async fn logout(
         // API-key callers don't have a session to revoke; only browser-style
         // session cookies are eligible to log out. Match the convention used
         // by other session-only routes (`me`, `tenants`, `api_keys`).
+        AuthContext::ExpiredSession => return Err(AppError::SessionExpired),
         AuthContext::ApiKey(_) | AuthContext::Anonymous => return Err(AppError::Unauthorized),
     };
 

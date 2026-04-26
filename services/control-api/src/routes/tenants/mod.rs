@@ -61,7 +61,7 @@ pub async fn list_members(
     require_role(&state.pool, session.user_id, tenant_id, TenantRole::Member).await?;
 
     let rows: Vec<(Uuid, String, String, Option<DateTime<Utc>>)> = sqlx::query_as(
-        "SELECT tm.user_id, u.email, tm.role, tm.invited_at \
+        "SELECT tm.user_id, u.email::text, tm.role, tm.invited_at \
          FROM control.tenant_members tm \
          JOIN control.users u ON u.id = tm.user_id \
          WHERE tm.tenant_id = $1 \

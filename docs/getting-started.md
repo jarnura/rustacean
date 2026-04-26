@@ -102,7 +102,7 @@ For running the API **outside Docker** (e.g. `cargo run`), create a `.env` file 
 export RB_DATABASE_URL=postgres://rustbrain:rustbrain@localhost:5432/rustbrain
 export RB_LISTEN_ADDR=0.0.0.0:8080
 export RB_BASE_URL=http://localhost:8080
-export RB_CORS_ORIGINS=http://localhost:5173
+export RB_CORS_ORIGINS=http://localhost:15173
 export RB_EMAIL_TRANSPORT=console        # prints emails to stdout
 export RUST_LOG=info,control_api=debug
 ```
@@ -121,7 +121,7 @@ npm install
 npm run dev
 ```
 
-The dev server starts at `http://localhost:5173`.
+The dev server starts at `http://localhost:15173`.
 
 If the API is running on a different address, override the proxy target:
 
@@ -136,7 +136,7 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ### Option A — using the UI
 
-1. Open `http://localhost:5173` in your browser.
+1. Open `http://localhost:15173` in your browser.
 2. Click **Sign up** and fill in email, password (min 12 chars), and a workspace name.
 3. Check the control-api logs for the verification email link (transport is `console` in dev):
    ```bash
@@ -149,7 +149,7 @@ VITE_API_BASE_URL=http://localhost:8080
      -d '{"token":"<token-from-log>"}'
    # → 204 No Content
    ```
-5. Log in at `http://localhost:5173/login` — you should land on the repositories page.
+5. Log in at `http://localhost:15173/login` — you should land on the repositories page.
 
 ### Option B — curl end-to-end
 

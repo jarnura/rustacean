@@ -17,7 +17,7 @@ The control-api service reads all configuration from environment variables. None
 | `RB_DATABASE_URL` | — | **yes** | PostgreSQL connection string |
 | `RB_LISTEN_ADDR` | `0.0.0.0:8080` | no | Address and port to bind |
 | `RB_BASE_URL` | `http://localhost:8080` | no | Public base URL (used in email links) |
-| `RB_CORS_ORIGINS` | `http://localhost:5173` | no | Comma-separated allowed CORS origins |
+| `RB_CORS_ORIGINS` | `http://localhost:15173` | no | Comma-separated allowed CORS origins |
 | `RB_SESSION_TTL_DAYS` | `30` | no | Sliding session expiry window in days |
 | `RB_ARGON2_MEMORY_KB` | `19456` | no | Argon2id memory cost (KiB) |
 | `RB_ARGON2_TIME_COST` | `2` | no | Argon2id iteration count |

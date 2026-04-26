@@ -33,7 +33,7 @@ RB_DATABASE_URL=postgres://rustbrain:rustbrain@localhost:5432/rustbrain \
 cd frontend && npm install && npm run dev
 ```
 
-The API is live at `http://localhost:8080`. The frontend is at `http://localhost:5173`.  
+The API is live at `http://localhost:8080`. The frontend is at `http://localhost:15173`.  
 Health check: `curl http://localhost:8080/health`
 
 ## Repository layout

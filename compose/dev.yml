@@ -217,7 +217,7 @@ services:
     environment:
       RB_DATABASE_URL: postgres://rustbrain:rustbrain@postgres:5432/rustbrain
       RB_LISTEN_ADDR: "0.0.0.0:8080"
-      RB_CORS_ORIGINS: "${RB_CORS_ORIGINS:-http://localhost:5173}"
+      RB_CORS_ORIGINS: "${RB_CORS_ORIGINS:-http://localhost:15173}"
       RB_BASE_URL: "${RB_BASE_URL:-http://localhost:8080}"
       RB_EMAIL_TRANSPORT: console
       RB_SECURE_COOKIES: "${RB_SECURE_COOKIES:-false}"

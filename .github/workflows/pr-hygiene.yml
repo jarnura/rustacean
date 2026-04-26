@@ -1,0 +1,33 @@
+name: PR Hygiene
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  pr-hygiene:
+    name: pr hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for internal tracking references
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          FAILED=0
+
+          if echo "$PR_TITLE" | grep -qiE '(RUSAA-|RUSTBRAINBYGOV-)'; then
+            echo "::error::PR title contains an internal tracking reference (RUSAA-* or RUSTBRAINBYGOV-*). Remove it before merging."
+            FAILED=1
+          fi
+
+          if echo "$PR_BODY" | grep -qiE '(RUSAA-|RUSTBRAINBYGOV-)'; then
+            echo "::error::PR body contains an internal tracking reference (RUSAA-* or RUSTBRAINBYGOV-*). Remove it before merging."
+            FAILED=1
+          fi
+
+          if ! echo "$PR_BODY" | grep -qiE 'closes[[:space:]]+#[0-9]+'; then
+            echo "::warning::PR body does not contain a 'Closes #XX' link. Add one to auto-close the related GitHub issue."
+          fi
+
+          exit $FAILED

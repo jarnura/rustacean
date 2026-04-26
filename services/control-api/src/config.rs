@@ -34,7 +34,7 @@ impl Config {
             database_url: env::var("RB_DATABASE_URL")
                 .context("RB_DATABASE_URL is required")?,
             cors_origins: env::var("RB_CORS_ORIGINS")
-                .unwrap_or_else(|_| "http://localhost:5173".to_owned())
+                .unwrap_or_else(|_| "http://localhost:15173".to_owned())
                 .split(',')
                 .map(|s| s.trim().to_owned())
                 .collect(),
@@ -74,7 +74,7 @@ impl Config {
         Self {
             listen_addr: "127.0.0.1:0".to_owned(),
             database_url: "postgres://localhost/test".to_owned(),
-            cors_origins: vec!["http://localhost:5173".to_owned()],
+            cors_origins: vec!["http://localhost:15173".to_owned()],
             base_url: "http://localhost:8080".to_owned(),
             session_ttl_days: 30,
             argon2_memory_kb: 64,

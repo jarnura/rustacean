@@ -28,6 +28,7 @@ docker compose --env-file compose/tailscale.env -f compose/dev.yml -f compose/ta
 | 13000 | 3000 | grafana | HTTP | Grafana dashboards |
 | 21434 | 11434 | ollama | HTTP | Ollama LLM API |
 | 18080 | 8080 | control-api | HTTP | Rustbrain control plane API |
+| 15173 | 15173 | frontend | HTTP | Vite dev server (React UI) — same on dev and tailscale |
 | 10080 | 80 | caddy | HTTP | Reverse proxy HTTP |
 | 10443 | 443 | caddy | HTTPS | Reverse proxy HTTPS |
 | 18081 | 8081 | pgweb | HTTP | pgweb DB browser (read-only) |
@@ -38,6 +39,7 @@ docker compose --env-file compose/tailscale.env -f compose/dev.yml -f compose/ta
 | Service | URL |
 |---------|-----|
 | Control API | http://100.87.157.74:18080 |
+| Frontend (Vite dev) | http://100.87.157.74:15173 |
 | Grafana | http://100.87.157.74:13000 |
 | Prometheus | http://100.87.157.74:19090 |
 | pgweb | http://100.87.157.74:18081 |
@@ -57,6 +59,7 @@ docker compose --env-file compose/tailscale.env -f compose/dev.yml -f compose/ta
 | 3100 | paperclip | Paperclip server |
 | 3103 | extensions-server | Governance extensions |
 | 4096 | rustbrain-opencode | OpenCode |
+| 5173 | paperclip-governance-board | Paperclip governance board plugin (do not reuse — frontend remapped to 15173) |
 | 5432 | rustbrain-postgres | Shared Postgres (pre-existing stack) |
 | 6333–6334 | rustbrain-qdrant | Qdrant (pre-existing stack) |
 | 7474, 7687 | rustbrain-neo4j | Neo4j (pre-existing stack) |

@@ -665,9 +665,9 @@ mod tests {
 
     #[test]
     fn verify_email_request_deserializes() {
-        let json = r#"{"token":"abc123def456"}"#; // gitleaks:allow
+        let json = r#"{"token":"abc123def456"}"#;
         let req: VerifyEmailRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.token, "abc123def456"); // gitleaks:allow
+        assert_eq!(req.token, "abc123def456");
     }
 
     #[test]

@@ -1,0 +1,4 @@
+# Fingerprints for test-fixture strings that triggered generic-api-key (false positive).
+# "abc123def456" in verify_email unit tests is a structural fixture, not a credential.
+2d8ce207aa40d39a794f68fd2ec0376f34edbc5d:services/control-api/src/routes/auth.rs:generic-api-key:506
+2d8ce207aa40d39a794f68fd2ec0376f34edbc5d:services/control-api/src/routes/auth.rs:generic-api-key:508

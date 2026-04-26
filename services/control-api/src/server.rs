@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
-use rb_auth::PasswordHasher;
+use rb_auth::{LoginRateLimiter, PasswordHasher};
 use rb_email::{SmtpConfig, from_transport};
 use sqlx::postgres::PgPoolOptions;
 use tower_http::{
@@ -50,6 +50,7 @@ pub async fn run(config: Config) -> Result<()> {
         pool,
         email_sender: Arc::from(email_sender),
         hasher: Arc::new(hasher),
+        login_rate_limiter: Arc::new(LoginRateLimiter::new()),
         config: Arc::new(config.clone()),
     };
 

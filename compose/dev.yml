@@ -10,7 +10,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     networks:
       - rb-net
     healthcheck:
@@ -28,8 +28,8 @@ services:
     volumes:
       - neo4j_data:/data
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "${NEO4J_HTTP_HOST_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_HOST_PORT:-7687}:7687"
     networks:
       - rb-net
     deploy:
@@ -48,8 +48,8 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "${QDRANT_REST_HOST_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
     networks:
       - rb-net
     deploy:
@@ -68,7 +68,7 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:9094"
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092,EXTERNAL://${KAFKA_ADVERTISED_HOST:-localhost}:${KAFKA_HOST_PORT:-9094}"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT"
       KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
@@ -82,7 +82,7 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
     ports:
-      - "9094:9094"
+      - "${KAFKA_HOST_PORT:-9094}:9094"
     networks:
       - rb-net
     healthcheck:
@@ -118,8 +118,8 @@ services:
     volumes:
       - ./infra/otel-collector/config.yaml:/etc/otel-collector/config.yaml:ro
     ports:
-      - "4317:4317"
-      - "4318:4318"
+      - "${OTEL_GRPC_HOST_PORT:-4317}:4317"
+      - "${OTEL_HTTP_HOST_PORT:-4318}:4318"
     networks:
       - rb-net
     depends_on:
@@ -133,7 +133,7 @@ services:
       - ./infra/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
     ports:
-      - "3200:3200"
+      - "${TEMPO_HOST_PORT:-3200}:3200"
     networks:
       - rb-net
     healthcheck:
@@ -152,7 +152,7 @@ services:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_HOST_PORT:-9090}:9090"
     networks:
       - rb-net
     healthcheck:
@@ -172,7 +172,7 @@ services:
       - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "3000:3000"
+      - "${GRAFANA_HOST_PORT:-3000}:3000"
     networks:
       - rb-net
     depends_on:
@@ -190,7 +190,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     ports:
-      - "11434:11434"
+      - "${OLLAMA_HOST_PORT:-11434}:11434"
     networks:
       - rb-net
 
@@ -202,14 +202,14 @@ services:
     environment:
       RB_DATABASE_URL: postgres://rustbrain:rustbrain@postgres:5432/rustbrain
       RB_LISTEN_ADDR: "0.0.0.0:8080"
-      RB_CORS_ORIGINS: "http://localhost:5173"
-      RB_BASE_URL: "http://localhost:8080"
+      RB_CORS_ORIGINS: "${RB_CORS_ORIGINS:-http://localhost:5173}"
+      RB_BASE_URL: "${RB_BASE_URL:-http://localhost:8080}"
       RB_EMAIL_TRANSPORT: console
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
       OTEL_SERVICE_NAME: control-api
       RUST_LOG: "info,control_api=debug"
     ports:
-      - "8080:8080"
+      - "${CONTROL_API_HOST_PORT:-8080}:8080"
     networks:
       - rb-net
     depends_on:
@@ -230,8 +230,8 @@ services:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
     ports:
-      - "80:80"
-      - "443:443"
+      - "${CADDY_HTTP_HOST_PORT:-80}:80"
+      - "${CADDY_HTTPS_HOST_PORT:-443}:443"
     networks:
       - rb-net
     depends_on:
@@ -243,7 +243,7 @@ services:
     environment:
       DATABASE_URL: postgres://rustbrain:rustbrain@postgres:5432/rustbrain?sslmode=disable
     ports:
-      - "8081:8081"
+      - "${PGWEB_HOST_PORT:-8081}:8081"
     networks:
       - rb-net
     depends_on:
@@ -257,7 +257,7 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       SERVER_PORT: 8082
     ports:
-      - "8082:8082"
+      - "${KAFKA_UI_HOST_PORT:-8082}:8082"
     networks:
       - rb-net
     depends_on:

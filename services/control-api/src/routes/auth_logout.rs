@@ -65,19 +65,20 @@ pub async fn logout(
 
     Ok((
         StatusCode::NO_CONTENT,
-        [("Set-Cookie", clear_session_cookie())],
+        [("Set-Cookie", clear_session_cookie(state.config.secure_cookies))],
     ))
 }
 
 /// Build the `Set-Cookie` value that clears `rb_session`.
 ///
-/// Attributes mirror the login cookie (`HttpOnly; SameSite=Lax; Path=/;
-/// Secure`) so browsers replace the existing cookie. `Max-Age=0` plus the
-/// unix-epoch `Expires` covers both modern and legacy clients.
-fn clear_session_cookie() -> String {
-    "rb_session=; HttpOnly; SameSite=Lax; Path=/; Secure; Max-Age=0; \
-     Expires=Thu, 01 Jan 1970 00:00:00 GMT"
-        .to_owned()
+/// Attributes mirror the login cookie so browsers replace the existing cookie.
+/// `Max-Age=0` plus the unix-epoch `Expires` covers both modern and legacy clients.
+fn clear_session_cookie(secure: bool) -> String {
+    let secure_attr = if secure { " Secure;" } else { "" };
+    format!(
+        "rb_session=; HttpOnly; SameSite=Lax; Path=/;{secure_attr} Max-Age=0; \
+         Expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    )
 }
 
 #[cfg(test)]
@@ -86,13 +87,13 @@ mod tests {
 
     #[test]
     fn clear_session_cookie_targets_rb_session() {
-        let cookie = clear_session_cookie();
+        let cookie = clear_session_cookie(true);
         assert!(cookie.starts_with("rb_session=;"), "cookie was: {cookie}");
     }
 
     #[test]
     fn clear_session_cookie_expires_immediately() {
-        let cookie = clear_session_cookie();
+        let cookie = clear_session_cookie(true);
         assert!(cookie.contains("Max-Age=0"), "cookie was: {cookie}");
         assert!(
             cookie.contains("Expires=Thu, 01 Jan 1970 00:00:00 GMT"),
@@ -101,14 +102,23 @@ mod tests {
     }
 
     #[test]
-    fn clear_session_cookie_preserves_login_attributes() {
-        let cookie = clear_session_cookie();
+    fn clear_session_cookie_with_secure_true_has_secure_attr() {
+        let cookie = clear_session_cookie(true);
         // Browsers only overwrite a cookie when Path/SameSite/Secure match the
-        // original Set-Cookie. Login emits all four — mirror them here.
+        // original Set-Cookie. Mirror login attributes here.
         assert!(cookie.contains("HttpOnly"), "cookie was: {cookie}");
         assert!(cookie.contains("SameSite=Lax"), "cookie was: {cookie}");
         assert!(cookie.contains("Path=/"), "cookie was: {cookie}");
         assert!(cookie.contains("Secure"), "cookie was: {cookie}");
+    }
+
+    #[test]
+    fn clear_session_cookie_with_secure_false_omits_secure_attr() {
+        let cookie = clear_session_cookie(false);
+        assert!(cookie.contains("HttpOnly"), "cookie was: {cookie}");
+        assert!(cookie.contains("SameSite=Lax"), "cookie was: {cookie}");
+        assert!(cookie.contains("Path=/"), "cookie was: {cookie}");
+        assert!(!cookie.contains("Secure"), "Secure must be absent: {cookie}");
     }
 
     #[test]

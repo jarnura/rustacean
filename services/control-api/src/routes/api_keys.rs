@@ -274,14 +274,14 @@ mod tests {
     fn create_response_serializes_all_fields() {
         let resp = CreateApiKeyResponse {
             id: Uuid::new_v4(),
-            key: "rb_live_abc123".to_owned(),
+            key: "rb_live_abc123".to_owned(), // gitleaks:allow — test fixture, not a real key
             name: "CI key".to_owned(),
             scopes: vec![Scope::Read],
             created_at: Utc::now(),
         };
         let val = serde_json::to_value(&resp).unwrap();
         assert!(val.get("id").is_some());
-        assert_eq!(val["key"], "rb_live_abc123");
+        assert_eq!(val["key"], "rb_live_abc123"); // gitleaks:allow — test fixture, not a real key
         assert_eq!(val["name"], "CI key");
         assert!(val.get("scopes").is_some());
         assert!(val.get("created_at").is_some());

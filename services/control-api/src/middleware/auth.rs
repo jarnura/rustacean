@@ -2,6 +2,7 @@ use axum::{
     extract::FromRequestParts,
     http::{header, request::Parts, StatusCode},
 };
+use chrono::{DateTime, Utc};
 use rb_auth::sha256_hex;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -45,6 +46,7 @@ pub struct SessionInfo {
     pub session_id: Uuid,
     pub user_id: Uuid,
     pub tenant_id: Uuid,
+    pub email_verified: bool,
 }
 
 /// Identity extracted from a valid API key in the `Authorization: Bearer` header.
@@ -72,6 +74,11 @@ pub struct ApiKeyInfo {
 pub enum AuthContext {
     Session(SessionInfo),
     ApiKey(ApiKeyInfo),
+    /// Session cookie matched a real session row but `expires_at <= now()`.
+    /// Routes that require an active session should map this to `SessionExpired`
+    /// (HTTP 401 `session_expired`) so the client can prompt re-login rather
+    /// than treat the user as never-authenticated.
+    ExpiredSession,
     Anonymous,
 }
 
@@ -94,8 +101,10 @@ impl FromRequestParts<AppState> for AuthContext {
             }
         }
         if let Some(token) = extract_session_cookie(parts) {
-            if let Some(info) = lookup_session(&state.pool, &token).await {
-                return Ok(AuthContext::Session(info));
+            match lookup_session(&state.pool, &token).await {
+                SessionLookup::Active(info) => return Ok(AuthContext::Session(info)),
+                SessionLookup::Expired => return Ok(AuthContext::ExpiredSession),
+                SessionLookup::NotFound => {}
             }
         }
         Ok(AuthContext::Anonymous)
@@ -128,18 +137,44 @@ fn extract_session_cookie(parts: &Parts) -> Option<String> {
 // Database lookups
 // ---------------------------------------------------------------------------
 
-async fn lookup_session(pool: &PgPool, token: &str) -> Option<SessionInfo> {
+/// Result of a session-cookie lookup.
+///
+/// We distinguish `Expired` from `NotFound` so the extractor can surface a
+/// `session_expired` (401) error instead of a generic `unauthorized`. Sessions
+/// that have been revoked are treated the same as never-existed (`NotFound`).
+pub(crate) enum SessionLookup {
+    Active(SessionInfo),
+    Expired,
+    NotFound,
+}
+
+pub(crate) async fn lookup_session(pool: &PgPool, token: &str) -> SessionLookup {
     let token_hash = sha256_hex(token);
-    let row: Option<(Uuid, Uuid, Uuid)> = sqlx::query_as(
-        "SELECT id, user_id, tenant_id \
-         FROM control.sessions \
-         WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()",
+    let row: Option<(Uuid, Uuid, Uuid, bool, DateTime<Utc>)> = match sqlx::query_as(
+        "SELECT s.id, s.user_id, s.tenant_id, \
+                (u.email_verified_at IS NOT NULL), \
+                s.expires_at \
+         FROM control.sessions s \
+         JOIN control.users u ON u.id = s.user_id \
+         WHERE s.token_hash = $1 AND s.revoked_at IS NULL",
     )
     .bind(&token_hash)
     .fetch_optional(pool)
     .await
-    .ok()?;
-    row.map(|(session_id, user_id, tenant_id)| SessionInfo { session_id, user_id, tenant_id })
+    {
+        Ok(row) => row,
+        Err(_) => return SessionLookup::NotFound,
+    };
+
+    let Some((session_id, user_id, tenant_id, email_verified, expires_at)) = row else {
+        return SessionLookup::NotFound;
+    };
+
+    if expires_at <= Utc::now() {
+        return SessionLookup::Expired;
+    }
+
+    SessionLookup::Active(SessionInfo { session_id, user_id, tenant_id, email_verified })
 }
 
 async fn lookup_api_key(pool: &PgPool, token: &str) -> Option<ApiKeyInfo> {
@@ -201,6 +236,27 @@ pub fn require_scope<'a>(auth: &'a AuthContext, required: &Scope) -> Result<&'a 
             }
         }
         _ => Err(AppError::Unauthorized),
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// Session-check helpers
+// ---------------------------------------------------------------------------
+
+/// Require an active session whose user has a verified email.
+///
+/// - `Session(info)` with `email_verified == true` → `Ok(info)`
+/// - `Session(info)` with `email_verified == false` → `EmailNotVerified` (403)
+/// - `ExpiredSession` → `SessionExpired` (401, `session_expired`)
+/// - `ApiKey` / `Anonymous` → `Unauthorized` (401)
+#[allow(dead_code)]
+pub fn require_verified_session(auth: AuthContext) -> Result<SessionInfo, AppError> {
+    match auth {
+        AuthContext::Session(info) if info.email_verified => Ok(info),
+        AuthContext::Session(_) => Err(AppError::EmailNotVerified),
+        AuthContext::ExpiredSession => Err(AppError::SessionExpired),
+        AuthContext::ApiKey(_) | AuthContext::Anonymous => Err(AppError::Unauthorized),
     }
 }
 
@@ -324,6 +380,7 @@ mod tests {
             session_id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
             tenant_id: Uuid::new_v4(),
+            email_verified: true,
         });
         assert!(matches!(require_scope(&auth, &Scope::Read), Err(AppError::Unauthorized)));
     }

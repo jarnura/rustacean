@@ -10,7 +10,7 @@ use crate::routes::{
     api_keys::{create_api_key, list_api_keys, revoke_api_key},
     auth::{forgot_password, login, reset_password, signup},
     health::{health_check, openapi_json, ready_check},
-    me::switch_tenant,
+    me::{get_me, switch_tenant},
     tenants::{invite_member, remove_member, transfer_ownership, update_member_role},
 };
 use crate::state::AppState;
@@ -25,6 +25,7 @@ pub fn build(state: AppState) -> Router {
         .route("/v1/auth/login", post(login))
         .route("/v1/auth/forgot-password", post(forgot_password))
         .route("/v1/auth/reset-password", post(reset_password))
+        .route("/v1/me", get(get_me))
         .route("/v1/me/switch-tenant", post(switch_tenant))
         .route("/v1/api-keys", post(create_api_key))
         .route("/v1/api-keys", get(list_api_keys))

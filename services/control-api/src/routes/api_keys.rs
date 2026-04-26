@@ -23,6 +23,7 @@ use crate::{
 fn require_session(auth: AuthContext) -> Result<SessionInfo, AppError> {
     match auth {
         AuthContext::Session(info) => Ok(info),
+        AuthContext::ExpiredSession => Err(AppError::SessionExpired),
         AuthContext::ApiKey(_) | AuthContext::Anonymous => Err(AppError::Unauthorized),
     }
 }
@@ -259,6 +260,7 @@ mod tests {
             session_id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
             tenant_id: Uuid::new_v4(),
+            email_verified: true,
         }
     }
 

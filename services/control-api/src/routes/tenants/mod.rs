@@ -467,15 +467,28 @@ mod tests {
     use uuid::Uuid;
 
     #[test]
-    fn require_session_returns_info_for_session_variant() {
+    fn require_session_returns_info_for_verified_session() {
         let info = SessionInfo {
             session_id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
             tenant_id: Uuid::new_v4(),
+            email_verified: true,
         };
         let ctx = AuthContext::Session(info.clone());
         let result = require_session(ctx).unwrap();
         assert_eq!(result.user_id, info.user_id);
+    }
+
+    #[test]
+    fn require_session_returns_email_not_verified_for_unverified() {
+        let info = SessionInfo {
+            session_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            tenant_id: Uuid::new_v4(),
+            email_verified: false,
+        };
+        let ctx = AuthContext::Session(info);
+        assert!(matches!(require_session(ctx), Err(AppError::EmailNotVerified)));
     }
 
     #[test]

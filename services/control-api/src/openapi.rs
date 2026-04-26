@@ -5,7 +5,7 @@
 
 use utoipa::OpenApi;
 
-use crate::routes::{api_keys, auth, auth_logout, health, me, tenants};
+use crate::routes::{api_keys, auth, auth_logout, auth_verify, health, me, tenants};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -15,7 +15,7 @@ use crate::routes::{api_keys, auth, auth_logout, health, me, tenants};
         auth::signup,
         auth::login,
         auth_logout::logout,
-        auth::verify_email,
+        auth_verify::verify_email,
         auth::forgot_password,
         auth::reset_password,
         me::switch_tenant,
@@ -34,7 +34,7 @@ use crate::routes::{api_keys, auth, auth_logout, health, me, tenants};
             auth::SignupResponse,
             auth::LoginRequest,
             auth::LoginResponse,
-            auth::VerifyEmailRequest,
+            auth_verify::VerifyEmailRequest,
             auth::ForgotPasswordRequest,
             auth::ResetPasswordRequest,
             me::SwitchTenantRequest,

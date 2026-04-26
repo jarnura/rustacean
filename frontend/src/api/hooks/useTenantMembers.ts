@@ -10,7 +10,11 @@ type UpdateRoleResponse = components["schemas"]["UpdateRoleResponse"];
 type TransferOwnershipRequest =
   components["schemas"]["TransferOwnershipRequest"];
 
+export const tenantMembersQueryKey = (tenantId: string) =>
+  ["tenants", tenantId, "members"] as const;
+
 export function useInviteMember(tenantId: string) {
+  const qc = useQueryClient();
   return useMutation<InviteMemberResponse, ApiError, InviteMemberRequest>({
     mutationFn: async (body) => {
       const { data, error, response } = await apiClient.POST(
@@ -22,10 +26,14 @@ export function useInviteMember(tenantId: string) {
       }
       return data;
     },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: tenantMembersQueryKey(tenantId) });
+    },
   });
 }
 
 export function useUpdateMemberRole(tenantId: string) {
+  const qc = useQueryClient();
   return useMutation<
     UpdateRoleResponse,
     ApiError,
@@ -40,6 +48,9 @@ export function useUpdateMemberRole(tenantId: string) {
         throw toApiError(response.status, error);
       }
       return data;
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: tenantMembersQueryKey(tenantId) });
     },
   });
 }

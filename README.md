@@ -54,12 +54,11 @@ rustacean/
 ├── frontend/            # React 18 + Vite + TypeScript + Tailwind + shadcn/ui
 ├── compose/
 │   ├── dev.yml          # Full dev stack: postgres, kafka, neo4j, qdrant, observability, API
-│   ├── tailscale.yml    # Overlay: restart policies for remote (mars) deployment
-│   └── tailscale.env    # Port remapping for mars (Tailscale IP: 100.87.157.74)
+│   ├── full.yml         # Full stack including all optional services
+│   └── test.yml         # Minimal stack used by integration tests
 ├── docker/
 │   └── control-api/     # Multi-stage Dockerfile for the API service
 ├── docs/
-│   ├── PORT_MAP.md      # Authoritative port reference — never reuse a listed port
 │   ├── getting-started.md
 │   ├── architecture.md
 │   ├── runbook.md
@@ -77,7 +76,6 @@ rustacean/
 | [Runbook](docs/runbook.md) | Start/stop, logs, health checks, migrations, failure modes |
 | [API Reference](docs/api-reference.md) | Every endpoint with request/response examples |
 | [Business Context](docs/business-context.md) | Problem statement, target users, product vision, roadmap |
-| [Port Map](docs/PORT_MAP.md) | Every port on the mars dev host |
 
 ## Development commands
 
@@ -102,14 +100,3 @@ cd frontend && npm run gen:api
 cd frontend && npm run typecheck
 ```
 
-## Tailscale remote access
-
-The dev stack runs on `mars` (Tailscale IP `100.87.157.74`). Deploy it with:
-
-```bash
-docker compose --env-file compose/tailscale.env \
-  -f compose/dev.yml -f compose/tailscale.yml up -d
-```
-
-Key services on mars: API `http://100.87.157.74:18080` · Grafana `http://100.87.157.74:13000` · pgweb `http://100.87.157.74:18081`  
-Full port list: [docs/PORT_MAP.md](docs/PORT_MAP.md)

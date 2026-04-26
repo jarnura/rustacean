@@ -6,13 +6,13 @@ Operational reference for the rust-brain dev stack. This document covers start/s
 
 ## Docker Compose stacks
 
-There are two compose files and an optional env file:
+There are three compose files in `compose/`:
 
 | File | Purpose |
 |------|---------|
 | `compose/dev.yml` | Full dev stack — all services with default local ports |
-| `compose/tailscale.yml` | Overlay — adds `restart: unless-stopped` to all services for remote deployment |
-| `compose/tailscale.env` | Port remapping for the mars host (Tailscale IP: `100.87.157.74`) |
+| `compose/full.yml` | Full stack including all optional services |
+| `compose/test.yml` | Minimal stack used by integration tests |
 
 ### Local development
 
@@ -29,24 +29,6 @@ docker compose -f compose/dev.yml down
 
 # Stop and delete all volumes (full reset)
 docker compose -f compose/dev.yml down -v
-```
-
-### Remote deployment (mars / Tailscale)
-
-```bash
-# Start (or restart after code changes)
-docker compose --env-file compose/tailscale.env \
-  -f compose/dev.yml -f compose/tailscale.yml up -d
-
-# Restart a single service after updating its image
-docker compose --env-file compose/tailscale.env \
-  -f compose/dev.yml -f compose/tailscale.yml up -d --no-deps control-api
-
-# Pull latest images and restart
-docker compose --env-file compose/tailscale.env \
-  -f compose/dev.yml -f compose/tailscale.yml pull
-docker compose --env-file compose/tailscale.env \
-  -f compose/dev.yml -f compose/tailscale.yml up -d
 ```
 
 ---
@@ -66,21 +48,6 @@ docker compose --env-file compose/tailscale.env \
 | kafka-ui | 8082 | HTTP | http://localhost:8082 |
 | caddy | 80/443 | HTTP/S | http://localhost |
 | ollama | 11434 | HTTP | http://localhost:11434 |
-
-### Remote — mars (tailscale.env remapping)
-
-| Service | Port | URL |
-|---------|------|-----|
-| control-api | 18080 | http://100.87.157.74:18080 |
-| postgres | 15432 | — |
-| kafka | 19094 | 100.87.157.74:19094 |
-| grafana | 13000 | http://100.87.157.74:13000 |
-| prometheus | 19090 | http://100.87.157.74:19090 |
-| pgweb | 18081 | http://100.87.157.74:18081 |
-| kafka-ui | 18082 | http://100.87.157.74:18082 |
-| ollama | 21434 | http://100.87.157.74:21434 |
-
-Full authoritative table: [PORT_MAP.md](PORT_MAP.md).
 
 ---
 
@@ -158,12 +125,6 @@ Migrations are managed by the `migrate` binary in `services/migrate/`. There is 
 ```bash
 # Against local Docker postgres
 RB_DATABASE_URL=postgres://rustbrain:rustbrain@localhost:5432/rustbrain \
-  cargo run -p migrate -- up
-
-# Against remote (mars) postgres through Tailscale.
-# Replace <user>:<password> with the credentials from compose/tailscale.env
-# (defaults match the local Docker compose values).
-RB_DATABASE_URL=postgres://<user>:<password>@100.87.157.74:15432/rustbrain \
   cargo run -p migrate -- up
 ```
 

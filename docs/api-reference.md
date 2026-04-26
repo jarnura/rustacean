@@ -23,6 +23,7 @@ The control-api service reads all configuration from environment variables. None
 | `RB_ARGON2_TIME_COST` | `2` | no | Argon2id iteration count |
 | `RB_ARGON2_PARALLELISM` | `1` | no | Argon2id parallelism |
 | `RB_EMAIL_TRANSPORT` | `console` | no | `console` (stdout), `smtp`, or `noop` |
+| `RB_SECURE_COOKIES` | `true` | no | Set the `Secure` flag on `rb_session` cookies. Set to `false` when running behind an HTTP proxy in development. |
 | `OTEL_SERVICE_NAME` | `control-api` | no | Service name in traces |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | no | OTLP gRPC endpoint (e.g. `http://otel-collector:4317`) |
 | `RUST_LOG` | — | no | Log filter (e.g. `info,control_api=debug`) |
@@ -291,7 +292,7 @@ Switch the active tenant for the current session. The caller must already be a m
 
 API keys allow machine-to-machine authentication. They are long-lived and do not use sessions. The plaintext key is returned exactly once at creation time.
 
-**Key format**: `rb_<random-bytes>` (shown only on creation)
+**Key format**: `rb_live_<32hex>` (shown only on creation)
 
 ### POST /v1/api-keys
 
@@ -317,7 +318,7 @@ Create a new API key for the current session's tenant.
 ```json
 {
   "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "key": "rb_EXAMPLE_KEY_REPLACE_ME",
+  "key": "rb_live_<32-lowercase-hex-characters>",
   "name": "CI pipeline",
   "scopes": ["read", "write"],
   "created_at": "2026-04-26T10:00:00Z"

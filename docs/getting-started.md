@@ -185,39 +185,9 @@ curl -s -b cookies.txt http://localhost:8080/v1/me | jq .
 
 ---
 
-## Tailscale remote dev (mars)
-
-If you are developing against the `mars` host (Tailscale IP `100.87.157.74`) instead of running Docker locally, the stack is already running with remapped ports. See [docs/PORT_MAP.md](PORT_MAP.md) for the full port table.
-
-Start or restart the remote stack:
-
-```bash
-docker compose --env-file compose/tailscale.env \
-  -f compose/dev.yml -f compose/tailscale.yml up -d
-```
-
-Key remote URLs:
-
-| Service | URL |
-|---------|-----|
-| Control API | `http://100.87.157.74:18080` |
-| Grafana | `http://100.87.157.74:13000` |
-| pgweb (DB browser) | `http://100.87.157.74:18081` |
-| Kafka UI | `http://100.87.157.74:18082` |
-| Prometheus | `http://100.87.157.74:19090` |
-
-When targeting the remote API, set your frontend proxy:
-
-```bash
-# frontend/.env.local
-VITE_API_BASE_URL=http://100.87.157.74:18080
-```
-
----
-
 ## Next steps
 
 - **Architecture deep-dive**: [docs/architecture.md](architecture.md)
 - **Ops reference**: [docs/runbook.md](runbook.md)
 - **API reference**: [docs/api-reference.md](api-reference.md)
-- **Contributing**: [CONTRIBUTING.md](../CONTRIBUTING.md)
+- **Contributing**: a contributor guide is forthcoming.

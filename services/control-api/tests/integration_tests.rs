@@ -147,6 +147,61 @@ async fn openapi_json_includes_signup_path() {
 }
 
 #[tokio::test]
+async fn openapi_json_includes_verify_email_path() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let raw = collect_body(response.into_body()).await;
+    let spec: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+    assert!(
+        spec["paths"]["/v1/auth/verify-email"].is_object(),
+        "verify-email path must be present in OpenAPI spec"
+    );
+}
+
+#[tokio::test]
+async fn verify_email_without_body_returns_400() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/verify-email")
+                .header("content-type", "application/json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Axum returns 400 when the JSON body is absent/empty (cannot parse EOF as JSON).
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn verify_email_missing_token_field_returns_422() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/verify-email")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
 async fn unknown_route_returns_404() {
     let response = app()
         .oneshot(

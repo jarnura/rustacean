@@ -1,0 +1,14 @@
+title = "rustacean gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "test fixtures — strings used as structural test data, not credentials"
+regexTarget = "secret"
+regexes = [
+  # verify_email unit test fixture in services/control-api/src/routes/auth.rs
+  '''abc123def456''',
+  # API key test fixtures (rb_live_ prefix, short suffix — not real 32-char keys)
+  '''rb_live_[a-z0-9]{1,31}''',
+]

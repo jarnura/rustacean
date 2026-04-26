@@ -6,23 +6,30 @@ use rb_auth::sha256_hex;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::state::AppState;
+use crate::{error::AppError, state::AppState};
 
-// Fields are part of the public API used by upcoming session endpoints
-// (RUSAA-31 login, RUSAA-34 /me, RUSAA-35 switch-tenant).
+// ---------------------------------------------------------------------------
+// Identity types
+// ---------------------------------------------------------------------------
+
 #[allow(dead_code, clippy::struct_field_names)]
 #[derive(Debug, Clone)]
 pub struct SessionInfo {
     pub session_id: Uuid,
     pub user_id: Uuid,
     pub tenant_id: Uuid,
+    /// `true` when `users.email_verified_at IS NOT NULL`.
+    pub email_verified: bool,
 }
+
+// ---------------------------------------------------------------------------
+// AuthContext
+// ---------------------------------------------------------------------------
 
 /// Identity attached to every inbound request.
 ///
-/// Populated by parsing `Cookie: rb_session=<token>`. The `Session` variant
-/// is produced when the token resolves to a valid, non-revoked, non-expired
-/// session row. All other cases produce `Anonymous`.
+/// - `Session` — resolved from `Cookie: rb_session=<token>`
+/// - `Anonymous` — no valid credential present
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum AuthContext {
@@ -46,6 +53,10 @@ impl FromRequestParts<AppState> for AuthContext {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Helpers for request credential extraction
+// ---------------------------------------------------------------------------
+
 fn extract_session_cookie(parts: &Parts) -> Option<String> {
     let cookie_header = parts.headers.get(header::COOKIE)?.to_str().ok()?;
     for part in cookie_header.split(';') {
@@ -59,19 +70,50 @@ fn extract_session_cookie(parts: &Parts) -> Option<String> {
     None
 }
 
+// ---------------------------------------------------------------------------
+// Database lookups
+// ---------------------------------------------------------------------------
+
 async fn lookup_session(pool: &PgPool, token: &str) -> Option<SessionInfo> {
     let token_hash = sha256_hex(token);
-    let row: Option<(Uuid, Uuid, Uuid)> = sqlx::query_as(
-        "SELECT id, user_id, tenant_id \
-         FROM control.sessions \
-         WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()",
+    let row: Option<(Uuid, Uuid, Uuid, bool)> = sqlx::query_as(
+        "SELECT s.id, s.user_id, s.tenant_id, \
+                (u.email_verified_at IS NOT NULL) \
+         FROM control.sessions s \
+         JOIN control.users u ON u.id = s.user_id \
+         WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()",
     )
     .bind(&token_hash)
     .fetch_optional(pool)
     .await
     .ok()?;
-    row.map(|(session_id, user_id, tenant_id)| SessionInfo { session_id, user_id, tenant_id })
+    row.map(|(session_id, user_id, tenant_id, email_verified)| SessionInfo {
+        session_id,
+        user_id,
+        tenant_id,
+        email_verified,
+    })
 }
+
+// ---------------------------------------------------------------------------
+// Auth helpers
+// ---------------------------------------------------------------------------
+
+/// Require a valid session whose owner has confirmed their email address.
+///
+/// Returns `Unauthorized` for non-session callers and `EmailNotVerified` for
+/// sessions where `email_verified_at` is NULL.
+pub fn require_verified_session(auth: AuthContext) -> Result<SessionInfo, AppError> {
+    match auth {
+        AuthContext::Session(info) if info.email_verified => Ok(info),
+        AuthContext::Session(_) => Err(AppError::EmailNotVerified),
+        AuthContext::Anonymous => Err(AppError::Unauthorized),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -80,15 +122,19 @@ mod tests {
 
     fn parts_with_cookie(cookie: &str) -> Parts {
         let mut headers = HeaderMap::new();
-        headers.insert(
-            header::COOKIE,
-            HeaderValue::from_str(cookie).unwrap(),
-        );
-        let mut req = axum::http::Request::builder()
-            .body(())
-            .unwrap();
+        headers.insert(header::COOKIE, HeaderValue::from_str(cookie).unwrap());
+        let mut req = axum::http::Request::builder().body(()).unwrap();
         *req.headers_mut() = headers;
         req.into_parts().0
+    }
+
+    fn make_session(email_verified: bool) -> SessionInfo {
+        SessionInfo {
+            session_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            tenant_id: Uuid::new_v4(),
+            email_verified,
+        }
     }
 
     #[test]
@@ -118,8 +164,31 @@ mod tests {
     #[test]
     fn extract_session_cookie_handles_whitespace_around_parts() {
         let parts = parts_with_cookie("first=a;  rb_session=tok99  ;last=b");
-        // Trim of each part means "rb_session=tok99  " → value = "tok99  "
-        // That's still non-empty so we get it back (trailing space is part of value).
         assert!(extract_session_cookie(&parts).is_some());
+    }
+
+    #[test]
+    fn require_verified_session_accepts_verified() {
+        let info = make_session(true);
+        let auth = AuthContext::Session(info.clone());
+        let result = require_verified_session(auth).unwrap();
+        assert_eq!(result.user_id, info.user_id);
+    }
+
+    #[test]
+    fn require_verified_session_rejects_unverified_session() {
+        let auth = AuthContext::Session(make_session(false));
+        assert!(matches!(
+            require_verified_session(auth),
+            Err(AppError::EmailNotVerified)
+        ));
+    }
+
+    #[test]
+    fn require_verified_session_rejects_anonymous() {
+        assert!(matches!(
+            require_verified_session(AuthContext::Anonymous),
+            Err(AppError::Unauthorized)
+        ));
     }
 }

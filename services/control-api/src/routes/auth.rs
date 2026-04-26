@@ -71,10 +71,7 @@ pub async fn signup(
         tracing::warn!(user_id = %result.user_id, error = %e, "verification email delivery failed");
     }
 
-    let cookie = format!(
-        "rb_session={}; HttpOnly; SameSite=Lax; Path=/; Secure",
-        result.session_token.as_str()
-    );
+    let cookie = build_session_cookie(result.session_token.as_str(), state.config.secure_cookies);
     Ok((
         StatusCode::CREATED,
         [("Set-Cookie", cookie)],
@@ -172,6 +169,11 @@ async fn execute_signup_transaction(
     .await?;
 
     Ok(SignupTransactionResult { user_id, session_token, email_token })
+}
+
+fn build_session_cookie(token: &str, secure: bool) -> String {
+    let secure_attr = if secure { "; Secure" } else { "" };
+    format!("rb_session={token}; HttpOnly; SameSite=Lax; Path=/{secure_attr}")
 }
 
 fn validate_email(email: &str) -> Result<(), AppError> {
@@ -473,10 +475,7 @@ pub async fn login(
 
     tx.commit().await?;
 
-    let cookie = format!(
-        "rb_session={}; HttpOnly; SameSite=Lax; Path=/; Secure",
-        session_token.as_str()
-    );
+    let cookie = build_session_cookie(session_token.as_str(), state.config.secure_cookies);
     Ok((
         StatusCode::OK,
         [("Set-Cookie", cookie)],

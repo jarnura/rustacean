@@ -15,6 +15,9 @@ pub struct Config {
     pub argon2_parallelism: u32,
     pub email_transport: String,
     pub service_name: String,
+    /// Whether to set the `Secure` flag on `rb_session` cookies.
+    /// Set `RB_SECURE_COOKIES=false` when running behind an HTTP proxy in development.
+    pub secure_cookies: bool,
 }
 
 impl Config {
@@ -57,6 +60,9 @@ impl Config {
                 .unwrap_or_else(|_| "console".to_owned()),
             service_name: env::var("OTEL_SERVICE_NAME")
                 .unwrap_or_else(|_| "control-api".to_owned()),
+            secure_cookies: env::var("RB_SECURE_COOKIES")
+                .map(|v| v.to_ascii_lowercase() != "false")
+                .unwrap_or(true),
         })
     }
 
@@ -77,6 +83,7 @@ impl Config {
             argon2_parallelism: 1,
             email_transport: "noop".to_owned(),
             service_name: "control-api-test".to_owned(),
+            secure_cookies: true,
         }
     }
 }

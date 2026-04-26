@@ -53,6 +53,7 @@ async fn real_db_state() -> Option<(AppState, PgPool)> {
         argon2_parallelism: 1,
         email_transport: "noop".to_owned(),
         service_name: "control-api-test".to_owned(),
+        secure_cookies: true,
     };
     let state = AppState {
         pool: pool.clone(),

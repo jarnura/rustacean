@@ -21,12 +21,16 @@ pub enum AppError {
     WeakPassword,
     #[error("invalid email address")]
     InvalidEmail,
+    #[error("invalid request")]
+    InvalidInput,
     #[error("invalid or expired token")]
     InvalidToken,
     #[error("authentication required")]
     Unauthorized,
     #[error("insufficient role for this operation")]
     InsufficientRole,
+    #[error("api key lacks required scope")]
+    InsufficientScope,
     #[error("cannot remove or demote the tenant owner")]
     CannotRemoveOwner,
     #[error("user is not a member of this tenant")]
@@ -54,12 +58,16 @@ impl IntoResponse for AppError {
             AppError::InvalidEmail => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "invalid_email", self.to_string())
             }
+            AppError::InvalidInput => (StatusCode::BAD_REQUEST, "invalid_input", self.to_string()),
             AppError::InvalidToken => (StatusCode::BAD_REQUEST, "invalid_token", self.to_string()),
             AppError::Unauthorized => {
                 (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string())
             }
             AppError::InsufficientRole => {
                 (StatusCode::FORBIDDEN, "insufficient_role", self.to_string())
+            }
+            AppError::InsufficientScope => {
+                (StatusCode::FORBIDDEN, "insufficient_scope", self.to_string())
             }
             AppError::CannotRemoveOwner => {
                 (StatusCode::BAD_REQUEST, "cannot_remove_owner", self.to_string())

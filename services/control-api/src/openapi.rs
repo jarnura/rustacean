@@ -5,7 +5,7 @@
 
 use utoipa::OpenApi;
 
-use crate::routes::{auth, health, me, tenants};
+use crate::routes::{api_keys, auth, health, me, tenants};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -16,6 +16,9 @@ use crate::routes::{auth, health, me, tenants};
         auth::forgot_password,
         auth::reset_password,
         me::switch_tenant,
+        api_keys::create_api_key,
+        api_keys::list_api_keys,
+        api_keys::revoke_api_key,
         tenants::invite_member,
         tenants::update_member_role,
         tenants::remove_member,
@@ -31,6 +34,10 @@ use crate::routes::{auth, health, me, tenants};
             me::SwitchTenantRequest,
             me::SwitchTenantResponse,
             me::CurrentTenant,
+            api_keys::CreateApiKeyRequest,
+            api_keys::CreateApiKeyResponse,
+            api_keys::ApiKeyItem,
+            api_keys::ListApiKeysResponse,
             tenants::InviteMemberRequest,
             tenants::InviteMemberResponse,
             tenants::UpdateRoleRequest,
@@ -52,6 +59,7 @@ use crate::routes::{auth, health, me, tenants};
         (name = "auth", description = "Authentication and session management"),
         (name = "me", description = "Current-user and session endpoints"),
         (name = "tenants", description = "Tenant membership and role management"),
+        (name = "api_keys", description = "API key management"),
     ),
 )]
 pub struct ApiDoc;

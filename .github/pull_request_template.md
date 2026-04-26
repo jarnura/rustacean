@@ -12,6 +12,6 @@
 ## Checklist
 
 - [ ] PR links a GitHub issue via `Closes #XX`
-- [ ] No internal tracking references (RUSAA-XX, RUSTBRAINBYGOV-XX) in title, body, or commit messages
+- [ ] No internal board tracking references in title, body, or commit messages
 - [ ] Tests added or updated for changed behaviour
 - [ ] Docs updated if API or architecture changed

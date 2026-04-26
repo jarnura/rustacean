@@ -61,8 +61,7 @@ impl Config {
             service_name: env::var("OTEL_SERVICE_NAME")
                 .unwrap_or_else(|_| "control-api".to_owned()),
             secure_cookies: env::var("RB_SECURE_COOKIES")
-                .map(|v| v.to_ascii_lowercase() != "false")
-                .unwrap_or(true),
+                .map_or(true, |v| !v.eq_ignore_ascii_case("false")),
         })
     }
 

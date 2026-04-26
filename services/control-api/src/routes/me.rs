@@ -55,27 +55,33 @@ pub async fn switch_tenant(
         AuthContext::Anonymous => return Err(AppError::Unauthorized),
     };
 
+    let mut tx = state.pool.begin().await?;
+
+    // FOR SHARE prevents a concurrent revocation from deleting/updating this row
+    // between our membership check and the session UPDATE that follows.
     let member: Option<(String,)> = sqlx::query_as(
         "SELECT role FROM control.tenant_members \
-         WHERE tenant_id = $1 AND user_id = $2",
+         WHERE tenant_id = $1 AND user_id = $2 \
+         FOR SHARE",
     )
     .bind(body.tenant_id)
     .bind(session.user_id)
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?;
 
     let (role,) = member.ok_or(AppError::NotAMember)?;
 
+    // FOR SHARE prevents the tenant from being deactivated between check and commit.
     let tenant: Option<(String, String)> = sqlx::query_as(
-        "SELECT name, slug FROM control.tenants WHERE id = $1 AND status = 'active'",
+        "SELECT name, slug FROM control.tenants \
+         WHERE id = $1 AND status = 'active' \
+         FOR SHARE",
     )
     .bind(body.tenant_id)
-    .fetch_optional(&state.pool)
+    .fetch_optional(&mut *tx)
     .await?;
 
     let (name, slug) = tenant.ok_or(AppError::NotFound)?;
-
-    let mut tx = state.pool.begin().await?;
 
     sqlx::query("UPDATE control.sessions SET tenant_id = $1 WHERE id = $2")
         .bind(body.tenant_id)

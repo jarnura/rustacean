@@ -59,7 +59,7 @@ axum-extra = { version = "0.10", features = ["cookie"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace", "request-id"] }
 # OpenAPI (REQ-DV-04)
-utoipa = { version = "5", features = ["axum_extras", "uuid"] }
+utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-axum = "0.2"
 # Secret management (REQ-DV-04 / rb-secrets)
 zeroize = { version = "1", features = ["derive"] }

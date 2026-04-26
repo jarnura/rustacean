@@ -1,0 +1,36 @@
+title = "Gitleaks configuration for rustacean"
+
+# Extend the default ruleset rather than replacing it.
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Allowlist
+# ---------------------------------------------------------------------------
+#
+# Suppresses `rb_live_<short-suffix>` test fixtures in services/control-api
+# source files. A "short" suffix is 1–31 hex/alphanumeric characters; real
+# API keys produced by `ApiKey::generate()` use exactly 32 lowercase hex
+# characters after the `rb_live_` prefix, so they are NOT covered here and
+# will still trigger a generic-api-key finding in CI.
+#
+# Implementation note: this uses the singular `[allowlist]` table form
+# (rather than the plural `[[allowlists]]` array form). In gitleaks v8.24.3
+# with `useDefault = true`, only the singular form reliably suppresses
+# findings produced by default rules — the table-array form was observed
+# to load without error but not to apply on PR diff scans.
+#
+# Inline `// gitleaks:allow` comments remain the primary, line-level
+# suppression mechanism for known fixtures; this config is the backstop
+# for diff-scope CI scans where the inline directive on the current file
+# cannot retroactively silence the original-introducing commit.
+
+[allowlist]
+description = "rb_live_<short-suffix> test fixtures in services/control-api"
+# Require BOTH the path AND the regex to match; otherwise findings in this
+# path with full-length keys (or with this regex elsewhere) would be allowed
+# unintentionally. With condition="AND", only short-suffix `rb_live_*`
+# strings inside services/control-api/src/**.rs are suppressed.
+condition = "AND"
+regexes = ['''rb_live_[a-z0-9]{1,31}\b''']
+paths = ['''services/control-api/src/.*\.rs''']

@@ -32,10 +32,12 @@ impl TenantRole {
 }
 
 /// Extract `SessionInfo` from `AuthContext` or return 401.
+///
+/// API key callers cannot use session-gated endpoints — use a session cookie.
 pub(super) fn require_session(auth: AuthContext) -> Result<SessionInfo, AppError> {
     match auth {
         AuthContext::Session(info) => Ok(info),
-        AuthContext::Anonymous => Err(AppError::Unauthorized),
+        AuthContext::ApiKey(_) | AuthContext::Anonymous => Err(AppError::Unauthorized),
     }
 }
 

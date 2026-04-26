@@ -52,7 +52,7 @@ pub async fn switch_tenant(
 ) -> Result<impl IntoResponse, AppError> {
     let session = match auth {
         AuthContext::Session(info) => info,
-        AuthContext::Anonymous => return Err(AppError::Unauthorized),
+        AuthContext::ApiKey(_) | AuthContext::Anonymous => return Err(AppError::Unauthorized),
     };
 
     let mut tx = state.pool.begin().await?;
@@ -156,7 +156,7 @@ mod tests {
     fn anonymous_auth_returns_unauthorized() {
         let result: Result<SessionInfo, AppError> = match AuthContext::Anonymous {
             AuthContext::Session(info) => Ok(info),
-            AuthContext::Anonymous => Err(AppError::Unauthorized),
+            AuthContext::ApiKey(_) | AuthContext::Anonymous => Err(AppError::Unauthorized),
         };
         assert!(matches!(result, Err(AppError::Unauthorized)));
     }
@@ -167,7 +167,7 @@ mod tests {
         let auth = AuthContext::Session(info.clone());
         let result: Result<SessionInfo, AppError> = match auth {
             AuthContext::Session(s) => Ok(s),
-            AuthContext::Anonymous => Err(AppError::Unauthorized),
+            AuthContext::ApiKey(_) | AuthContext::Anonymous => Err(AppError::Unauthorized),
         };
         let extracted = result.unwrap();
         assert_eq!(extracted.user_id, info.user_id);

@@ -15,7 +15,7 @@ use crate::routes::{
     auth_verify::verify_email,
     health::{health_check, openapi_json, ready_check},
     me::{get_me, switch_tenant},
-    tenants::{invite_member, remove_member, transfer_ownership, update_member_role},
+    tenants::{invite_member, list_members, remove_member, transfer_ownership, update_member_role},
 };
 use crate::state::AppState;
 
@@ -36,7 +36,7 @@ pub fn build(state: AppState) -> Router {
         .route("/v1/api-keys", post(create_api_key))
         .route("/v1/api-keys", get(list_api_keys))
         .route("/v1/api-keys/{id}", delete(revoke_api_key))
-        .route("/v1/tenants/{id}/members", post(invite_member))
+        .route("/v1/tenants/{id}/members", get(list_members).post(invite_member))
         .route("/v1/tenants/{id}/members/{uid}/role", put(update_member_role))
         .route("/v1/tenants/{id}/members/{uid}", delete(remove_member))
         .route("/v1/tenants/{id}/transfer-ownership", post(transfer_ownership))

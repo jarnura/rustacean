@@ -56,6 +56,7 @@ export function useUpdateMemberRole(tenantId: string) {
 }
 
 export function useRemoveMember(tenantId: string) {
+  const qc = useQueryClient();
   return useMutation<void, ApiError, string>({
     mutationFn: async (uid) => {
       const { error, response } = await apiClient.DELETE(
@@ -65,6 +66,9 @@ export function useRemoveMember(tenantId: string) {
       if (error) {
         throw toApiError(response.status, error);
       }
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: tenantMembersQueryKey(tenantId) });
     },
   });
 }
@@ -83,6 +87,7 @@ export function useTransferOwnership(tenantId: string) {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: meQueryKey });
+      void qc.invalidateQueries({ queryKey: tenantMembersQueryKey(tenantId) });
     },
   });
 }

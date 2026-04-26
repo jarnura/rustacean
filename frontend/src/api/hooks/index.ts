@@ -13,6 +13,7 @@ export {
   useRevokeApiKey,
 } from "./useApiKeys";
 export {
+  tenantMembersQueryKey,
   useInviteMember,
   useUpdateMemberRole,
   useRemoveMember,

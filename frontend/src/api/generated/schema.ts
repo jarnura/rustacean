@@ -274,7 +274,12 @@ export interface paths {
             readonly path?: never;
             readonly cookie?: never;
         };
-        readonly get?: never;
+        /**
+         * List all members of a tenant.
+         * @description Returns the user ID, email, role, and invitation time for every member.
+         *     Requires: session with at least member role in the target tenant.
+         */
+        readonly get: operations["list_members"];
         readonly put?: never;
         /**
          * Invite a user to this tenant by email.
@@ -415,6 +420,9 @@ export interface components {
         readonly ListApiKeysResponse: {
             readonly keys: readonly components["schemas"]["ApiKeyItem"][];
         };
+        readonly ListMembersResponse: {
+            readonly members: readonly components["schemas"]["MemberItem"][];
+        };
         readonly LoginRequest: {
             /** @description RFC 5322 email address. */
             readonly email: string;
@@ -437,6 +445,14 @@ export interface components {
             readonly available_tenants: readonly components["schemas"]["TenantWithRole"][];
             readonly current_tenant: components["schemas"]["TenantWithRole"];
             readonly user: components["schemas"]["UserInfo"];
+        };
+        readonly MemberItem: {
+            readonly email: string;
+            /** Format: date-time */
+            readonly invited_at?: string | null;
+            readonly role: string;
+            /** Format: uuid */
+            readonly user_id: string;
         };
         readonly ProbeResponse: {
             readonly status: string;
@@ -930,6 +946,43 @@ export interface operations {
             };
             /** @description Target tenant not found or inactive */
             readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly list_members: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description Tenant ID */
+                readonly id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Member list */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ListMembersResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a member (not_a_member) */
+            readonly 403: {
                 headers: {
                     readonly [name: string]: unknown;
                 };

@@ -400,6 +400,44 @@
       }
     },
     "/v1/tenants/{id}/members": {
+      "get": {
+        "tags": [
+          "tenants"
+        ],
+        "summary": "List all members of a tenant.",
+        "description": "Returns the user ID, email, role, and invitation time for every member.\nRequires: session with at least member role in the target tenant.",
+        "operationId": "list_members",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListMembersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Not a member (not_a_member)"
+          }
+        }
+      },
       "post": {
         "tags": [
           "tenants"
@@ -804,6 +842,20 @@
           }
         }
       },
+      "ListMembersResponse": {
+        "type": "object",
+        "required": [
+          "members"
+        ],
+        "properties": {
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemberItem"
+            }
+          }
+        }
+      },
       "LoginRequest": {
         "type": "object",
         "required": [
@@ -863,6 +915,33 @@
           },
           "user": {
             "$ref": "#/components/schemas/UserInfo"
+          }
+        }
+      },
+      "MemberItem": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "email",
+          "role"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "invited_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "role": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },

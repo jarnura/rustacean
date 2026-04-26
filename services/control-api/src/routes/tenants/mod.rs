@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use chrono::{DateTime, Utc};
 use rb_auth::EmailToken;
 use rb_email::EmailTemplate;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,70 @@ use crate::{
     state::AppState,
 };
 use role::{TenantRole, require_role, require_session, urlencoding_simple};
+
+// ---------------------------------------------------------------------------
+// GET /v1/tenants/{id}/members
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MemberItem {
+    pub user_id: Uuid,
+    pub email: String,
+    pub role: String,
+    pub invited_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ListMembersResponse {
+    pub members: Vec<MemberItem>,
+}
+
+/// List all members of a tenant.
+///
+/// Returns the user ID, email, role, and invitation time for every member.
+/// Requires: session with at least member role in the target tenant.
+#[utoipa::path(
+    get,
+    path = "/v1/tenants/{id}/members",
+    params(("id" = Uuid, Path, description = "Tenant ID")),
+    responses(
+        (status = 200, description = "Member list", body = ListMembersResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Not a member (not_a_member)"),
+    ),
+    tag = "tenants"
+)]
+pub async fn list_members(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(tenant_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    let session = require_session(auth)?;
+    require_role(&state.pool, session.user_id, tenant_id, TenantRole::Member).await?;
+
+    let rows: Vec<(Uuid, String, String, Option<DateTime<Utc>>)> = sqlx::query_as(
+        "SELECT tm.user_id, u.email, tm.role, tm.invited_at \
+         FROM control.tenant_members tm \
+         JOIN control.users u ON u.id = tm.user_id \
+         WHERE tm.tenant_id = $1 \
+         ORDER BY tm.invited_at ASC NULLS FIRST",
+    )
+    .bind(tenant_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let members = rows
+        .into_iter()
+        .map(|(user_id, email, role, invited_at)| MemberItem {
+            user_id,
+            email,
+            role,
+            invited_at,
+        })
+        .collect();
+
+    Ok(Json(ListMembersResponse { members }))
+}
 
 // ---------------------------------------------------------------------------
 // POST /v1/tenants/{id}/members

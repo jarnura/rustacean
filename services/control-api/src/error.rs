@@ -33,6 +33,8 @@ pub enum AppError {
     NotAMember,
     #[error("user is already a member of this tenant")]
     AlreadyMember,
+    #[error("email address not yet verified")]
+    EmailNotVerified,
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
     #[error("auth error: {0}")]
@@ -66,6 +68,9 @@ impl IntoResponse for AppError {
             }
             AppError::NotAMember => (StatusCode::FORBIDDEN, "not_a_member", self.to_string()),
             AppError::AlreadyMember => (StatusCode::CONFLICT, "already_member", self.to_string()),
+            AppError::EmailNotVerified => {
+                (StatusCode::FORBIDDEN, "email_not_verified", self.to_string())
+            }
             AppError::Database(e) => {
                 tracing::error!(error = %e, "database error");
                 (

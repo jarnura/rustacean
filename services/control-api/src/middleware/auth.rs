@@ -39,13 +39,13 @@ impl Scope {
 // Identity types
 // ---------------------------------------------------------------------------
 
-// Fields used by session-gated handlers (login, switch-tenant, etc.)
 #[allow(dead_code, clippy::struct_field_names)]
 #[derive(Debug, Clone)]
 pub struct SessionInfo {
     pub session_id: Uuid,
     pub user_id: Uuid,
     pub tenant_id: Uuid,
+    /// `true` when `users.email_verified_at IS NOT NULL`.
     pub email_verified: bool,
 }
 
@@ -218,7 +218,7 @@ fn parse_scopes(value: &serde_json::Value) -> Vec<Scope> {
 }
 
 // ---------------------------------------------------------------------------
-// Scope-check helper
+// Auth helpers
 // ---------------------------------------------------------------------------
 
 /// Require that the caller authenticated via API key and holds the given scope.
@@ -288,6 +288,15 @@ mod tests {
         req.into_parts().0
     }
 
+    fn make_session(email_verified: bool) -> SessionInfo {
+        SessionInfo {
+            session_id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            tenant_id: Uuid::new_v4(),
+            email_verified,
+        }
+    }
+
     #[test]
     fn extract_session_cookie_finds_rb_session() {
         let parts = parts_with_cookie("rb_session=abc123; other=val");
@@ -310,6 +319,12 @@ mod tests {
     fn extract_session_cookie_ignores_empty_value() {
         let parts = parts_with_cookie("rb_session=");
         assert!(extract_session_cookie(&parts).is_none());
+    }
+
+    #[test]
+    fn extract_session_cookie_handles_whitespace_around_parts() {
+        let parts = parts_with_cookie("first=a;  rb_session=tok99  ;last=b");
+        assert!(extract_session_cookie(&parts).is_some());
     }
 
     #[test]
@@ -380,7 +395,7 @@ mod tests {
             session_id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
             tenant_id: Uuid::new_v4(),
-            email_verified: true,
+            email_verified: false,
         });
         assert!(matches!(require_scope(&auth, &Scope::Read), Err(AppError::Unauthorized)));
     }
@@ -410,6 +425,31 @@ mod tests {
         assert!(matches!(
             require_scope(&auth, &Scope::Write),
             Err(AppError::InsufficientScope)
+        ));
+    }
+
+    #[test]
+    fn require_verified_session_accepts_verified() {
+        let info = make_session(true);
+        let auth = AuthContext::Session(info.clone());
+        let result = require_verified_session(auth).unwrap();
+        assert_eq!(result.user_id, info.user_id);
+    }
+
+    #[test]
+    fn require_verified_session_rejects_unverified_session() {
+        let auth = AuthContext::Session(make_session(false));
+        assert!(matches!(
+            require_verified_session(auth),
+            Err(AppError::EmailNotVerified)
+        ));
+    }
+
+    #[test]
+    fn require_verified_session_rejects_anonymous() {
+        assert!(matches!(
+            require_verified_session(AuthContext::Anonymous),
+            Err(AppError::Unauthorized)
         ));
     }
 }

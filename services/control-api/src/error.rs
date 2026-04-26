@@ -43,7 +43,7 @@ pub enum AppError {
     AccountSuspended,
     #[error("session expired")]
     SessionExpired,
-    #[error("email not verified")]
+    #[error("email address not yet verified")]
     EmailNotVerified,
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),

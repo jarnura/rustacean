@@ -150,6 +150,61 @@ async fn openapi_json_includes_signup_path() {
 }
 
 #[tokio::test]
+async fn openapi_json_includes_verify_email_path() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let raw = collect_body(response.into_body()).await;
+    let spec: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+    assert!(
+        spec["paths"]["/v1/auth/verify-email"].is_object(),
+        "verify-email path must be present in OpenAPI spec"
+    );
+}
+
+#[tokio::test]
+async fn verify_email_without_body_returns_400() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/verify-email")
+                .header("content-type", "application/json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Axum returns 400 when the JSON body is absent/empty (cannot parse EOF as JSON).
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn verify_email_missing_token_field_returns_422() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/verify-email")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
 async fn unknown_route_returns_404() {
     let response = app()
         .oneshot(
@@ -162,6 +217,61 @@ async fn unknown_route_returns_404() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn openapi_json_includes_logout_path() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let raw = collect_body(response.into_body()).await;
+    let spec: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+    assert!(
+        spec["paths"]["/v1/auth/logout"]["post"].is_object(),
+        "logout POST must be present in OpenAPI spec",
+    );
+}
+
+#[tokio::test]
+async fn logout_without_session_cookie_returns_401() {
+    // No `Cookie` header → AuthContext::Anonymous resolves without touching the
+    // database, so this exercises the unauthorized branch end-to-end without a
+    // running Postgres.
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/logout")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn logout_rejects_get_method() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/auth/logout")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +379,6 @@ async fn integration_login_full_flow() {
         )
         .await
         .unwrap();
-
     assert_eq!(resp.status(), StatusCode::OK, "login must return 200");
 
     let cookie = resp
@@ -365,3 +474,4 @@ async fn integration_login_rate_limit() {
         .unwrap();
     assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS, "6th attempt must be rate-limited");
 }
+

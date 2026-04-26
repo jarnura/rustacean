@@ -38,6 +38,7 @@ pub struct SwitchTenantResponse {
 /// The caller must already be a member of the target tenant. The session's
 /// `tenant_id` is updated in place and a `tenant_switched` auth event is
 /// written. Returns the new active tenant with the caller's role.
+/// Requires: verified session.
 #[utoipa::path(
     post,
     path = "/v1/me/switch-tenant",
@@ -45,7 +46,7 @@ pub struct SwitchTenantResponse {
     responses(
         (status = 200, description = "Tenant switched", body = SwitchTenantResponse),
         (status = 401, description = "Not authenticated"),
-        (status = 403, description = "Not a member of the target tenant (not_a_member)"),
+        (status = 403, description = "Email not verified (email_not_verified) or not a member (not_a_member)"),
         (status = 404, description = "Target tenant not found or inactive"),
     ),
     tag = "me"
@@ -55,11 +56,7 @@ pub async fn switch_tenant(
     auth: AuthContext,
     Json(body): Json<SwitchTenantRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let session = match auth {
-        AuthContext::Session(info) => info,
-        AuthContext::ExpiredSession => return Err(AppError::SessionExpired),
-        AuthContext::ApiKey(_) | AuthContext::Anonymous => return Err(AppError::Unauthorized),
-    };
+    let session = require_verified_session(auth)?;
 
     let mut tx = state.pool.begin().await?;
 
@@ -265,12 +262,12 @@ mod tests {
     use super::*;
     use crate::middleware::auth::{AuthContext, SessionInfo};
 
-    fn make_session() -> SessionInfo {
+    fn make_session(email_verified: bool) -> SessionInfo {
         SessionInfo {
             session_id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
             tenant_id: Uuid::new_v4(),
-            email_verified: true,
+            email_verified,
         }
     }
 
@@ -301,26 +298,28 @@ mod tests {
 
     #[test]
     fn anonymous_auth_returns_unauthorized() {
-        let result: Result<SessionInfo, AppError> = match AuthContext::Anonymous {
-            AuthContext::Session(info) => Ok(info),
-            AuthContext::ExpiredSession => Err(AppError::SessionExpired),
-            AuthContext::ApiKey(_) | AuthContext::Anonymous => Err(AppError::Unauthorized),
-        };
-        assert!(matches!(result, Err(AppError::Unauthorized)));
+        assert!(matches!(
+            require_verified_session(AuthContext::Anonymous),
+            Err(AppError::Unauthorized)
+        ));
     }
 
     #[test]
-    fn session_auth_returns_info() {
-        let info = make_session();
+    fn unverified_session_returns_email_not_verified() {
+        let auth = AuthContext::Session(make_session(false));
+        assert!(matches!(
+            require_verified_session(auth),
+            Err(AppError::EmailNotVerified)
+        ));
+    }
+
+    #[test]
+    fn verified_session_returns_info() {
+        let info = make_session(true);
         let auth = AuthContext::Session(info.clone());
-        let result: Result<SessionInfo, AppError> = match auth {
-            AuthContext::Session(s) => Ok(s),
-            AuthContext::ExpiredSession => Err(AppError::SessionExpired),
-            AuthContext::ApiKey(_) | AuthContext::Anonymous => Err(AppError::Unauthorized),
-        };
-        let extracted = result.unwrap();
-        assert_eq!(extracted.user_id, info.user_id);
-        assert_eq!(extracted.session_id, info.session_id);
+        let result = require_verified_session(auth).unwrap();
+        assert_eq!(result.user_id, info.user_id);
+        assert_eq!(result.session_id, info.session_id);
     }
 
     #[test]
@@ -420,7 +419,7 @@ mod tests {
     #[test]
     fn require_verified_session_accepts_verified_session() {
         use crate::middleware::auth::require_verified_session;
-        let info = make_session();
+        let info = make_session(true);
         let user_id = info.user_id;
         let auth = AuthContext::Session(info);
         let extracted = require_verified_session(auth).expect("verified session");
@@ -434,5 +433,10 @@ mod tests {
             require_verified_session(AuthContext::Anonymous),
             Err(AppError::Unauthorized)
         ));
+    }
+
+    #[test]
+    fn email_not_verified_error_message() {
+        assert_eq!(AppError::EmailNotVerified.to_string(), "email address not yet verified");
     }
 }

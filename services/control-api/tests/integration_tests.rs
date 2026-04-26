@@ -7,8 +7,10 @@ use axum::{
 use http_body_util::BodyExt as _;
 use rb_auth::{LoginRateLimiter, PasswordHasher};
 use rb_email::from_transport;
+use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt as _;
+use uuid::Uuid;
 
 use control_api::{AppState, Config, build};
 
@@ -160,4 +162,206 @@ async fn unknown_route_returns_404() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+// ---------------------------------------------------------------------------
+// Real-DB integration tests — skipped when RB_DATABASE_URL is not set
+// ---------------------------------------------------------------------------
+
+/// Build a state connected to a real Postgres instance.
+///
+/// Returns `None` when `RB_DATABASE_URL` is absent so callers can skip
+/// gracefully instead of panicking.
+async fn real_db_state() -> Option<(AppState, PgPool)> {
+    let db_url = std::env::var("RB_DATABASE_URL").ok()?;
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&db_url)
+        .await
+        .ok()?;
+    let smtp = rb_email::SmtpConfig {
+        host: String::new(),
+        port: 587,
+        username: String::new(),
+        password: String::new(),
+        from_address: "test@example.com".to_owned(),
+    };
+    let email_sender = from_transport("noop", &smtp).ok()?;
+    let hasher = PasswordHasher::from_config(64, 1, 1).ok()?;
+    let config = Config {
+        listen_addr: "127.0.0.1:0".to_owned(),
+        database_url: db_url,
+        cors_origins: vec![],
+        base_url: "http://localhost:8080".to_owned(),
+        session_ttl_days: 30,
+        argon2_memory_kb: 64,
+        argon2_time_cost: 1,
+        argon2_parallelism: 1,
+        email_transport: "noop".to_owned(),
+        service_name: "control-api-test".to_owned(),
+    };
+    let state = AppState {
+        pool: pool.clone(),
+        email_sender: Arc::from(email_sender),
+        hasher: Arc::new(hasher),
+        login_rate_limiter: Arc::new(LoginRateLimiter::new()),
+        config: Arc::new(config),
+    };
+    Some((state, pool))
+}
+
+fn json_body(v: serde_json::Value) -> Body {
+    Body::from(serde_json::to_vec(&v).expect("serialise JSON"))
+}
+
+/// Full login flow: signup → SQL-verify email → login → assert Secure cookie.
+///
+/// Uses `email_verified_at` SQL patch because the noop transport discards the
+/// verification email; the verify-email endpoint itself is covered by RUSAA-30.
+#[tokio::test]
+async fn integration_login_full_flow() {
+    let Some((state, pool)) = real_db_state().await else {
+        return;
+    };
+    let app = build(state);
+    let email = format!("integ-login-{}@test.example", Uuid::new_v4().simple());
+    let password = "correct-horse-battery-staple";
+
+    // 1. Signup
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/signup")
+                .header("content-type", "application/json")
+                .body(json_body(serde_json::json!({
+                    "email": email,
+                    "password": password,
+                    "tenant_name": "Integration Login Tenant",
+                })))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED, "signup must return 201");
+
+    // 2. Patch email_verified_at directly (noop transport discards the email)
+    sqlx::query("UPDATE control.users SET email_verified_at = NOW() WHERE email = $1")
+        .bind(&email)
+        .execute(&pool)
+        .await
+        .expect("email verification patch must succeed");
+
+    // 3. Login
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/login")
+                .header("content-type", "application/json")
+                .body(json_body(serde_json::json!({
+                    "email": email,
+                    "password": password,
+                })))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::OK, "login must return 200");
+
+    let cookie = resp
+        .headers()
+        .get("set-cookie")
+        .expect("Set-Cookie header must be present")
+        .to_str()
+        .unwrap();
+    assert!(cookie.contains("rb_session="), "cookie must contain rb_session token");
+    assert!(cookie.contains("Secure"), "cookie must carry the Secure flag");
+    assert!(cookie.contains("HttpOnly"), "cookie must carry HttpOnly");
+
+    let raw = collect_body(resp.into_body()).await;
+    let body: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+    assert!(body["user_id"].is_string(), "user_id must be present");
+    assert!(body["tenant_id"].is_string(), "tenant_id must be present");
+    assert_eq!(
+        body["email_verification_required"], false,
+        "email_verification_required must be false after verification"
+    );
+}
+
+/// Rate-limit path: 5 failed attempts → 6th is blocked with 429.
+#[tokio::test]
+async fn integration_login_rate_limit() {
+    let Some((state, _pool)) = real_db_state().await else {
+        return;
+    };
+    let app = build(state);
+    let email = format!("integ-ratelimit-{}@test.example", Uuid::new_v4().simple());
+    let password = "correct-horse-battery-staple";
+
+    // Signup so the email resolves in the DB (rate limiter fires on bad password,
+    // not on "user not found" — both paths record a failure, but this makes the
+    // argon2 verify path exercise the full record_attempt logic).
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/signup")
+                .header("content-type", "application/json")
+                .body(json_body(serde_json::json!({
+                    "email": email,
+                    "password": password,
+                    "tenant_name": "Rate Limit Test Tenant",
+                })))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // 5 wrong-password attempts — each must return 401
+    for i in 0..5 {
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/auth/login")
+                    .header("content-type", "application/json")
+                    .body(json_body(serde_json::json!({
+                        "email": email,
+                        "password": "wrong-password-xyz",
+                    })))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNAUTHORIZED,
+            "attempt {i} must be 401"
+        );
+    }
+
+    // 6th attempt — must be rate-limited (429) regardless of credentials
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/auth/login")
+                .header("content-type", "application/json")
+                .body(json_body(serde_json::json!({
+                    "email": email,
+                    "password": "wrong-password-xyz",
+                })))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS, "6th attempt must be rate-limited");
 }

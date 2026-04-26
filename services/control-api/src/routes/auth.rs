@@ -438,6 +438,8 @@ pub async fn login(
     }
 
     if user_status == "suspended" {
+        // Suspended accounts return 403 without recording a failed attempt —
+        // credential validity was already proven by argon2id above.
         return Err(AppError::AccountSuspended);
     }
 
@@ -472,7 +474,7 @@ pub async fn login(
     tx.commit().await?;
 
     let cookie = format!(
-        "rb_session={}; HttpOnly; SameSite=Lax; Path=/",
+        "rb_session={}; HttpOnly; SameSite=Lax; Path=/; Secure",
         session_token.as_str()
     );
     Ok((

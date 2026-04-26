@@ -76,7 +76,7 @@ pub async fn switch_tenant(
 
     // FOR SHARE prevents the tenant from being deactivated between check and commit.
     let tenant: Option<(String, String)> = sqlx::query_as(
-        "SELECT name, slug FROM control.tenants \
+        "SELECT name, slug::text FROM control.tenants \
          WHERE id = $1 AND status = 'active' \
          FOR SHARE",
     )

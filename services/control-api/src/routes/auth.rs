@@ -72,7 +72,7 @@ pub async fn signup(
     }
 
     let cookie = format!(
-        "rb_session={}; HttpOnly; SameSite=Lax; Path=/",
+        "rb_session={}; HttpOnly; SameSite=Lax; Path=/; Secure",
         result.session_token.as_str()
     );
     Ok((

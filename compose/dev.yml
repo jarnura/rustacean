@@ -194,6 +194,21 @@ services:
     networks:
       - rb-net
 
+  rb-migrations:
+    image: postgres:16-alpine
+    environment:
+      DATABASE_URL: postgres://rustbrain:rustbrain@postgres:5432/rustbrain
+    volumes:
+      - ../migrations:/migrations:ro
+      - ./scripts/migrate-control.sh:/usr/local/bin/migrate-control.sh:ro
+    command: ["sh", "/usr/local/bin/migrate-control.sh"]
+    restart: "no"
+    networks:
+      - rb-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   control-api:
     build:
       context: ..
@@ -216,6 +231,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rb-migrations:
+        condition: service_completed_successfully
       otel-collector:
         condition: service_started
     healthcheck:

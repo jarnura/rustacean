@@ -2,7 +2,7 @@ use uuid::Uuid;
 
 use crate::{
     error::AppError,
-    middleware::auth::{AuthContext, SessionInfo},
+    middleware::auth::{AuthContext, SessionInfo, require_verified_session},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -31,14 +31,12 @@ impl TenantRole {
     }
 }
 
-/// Extract `SessionInfo` from `AuthContext` or return 401.
+/// Extract a verified `SessionInfo` from `AuthContext` or return an error.
 ///
-/// API key callers cannot use session-gated endpoints — use a session cookie.
+/// Returns `Unauthorized` for anonymous callers and `EmailNotVerified` when
+/// the user has not yet confirmed their email address.
 pub(super) fn require_session(auth: AuthContext) -> Result<SessionInfo, AppError> {
-    match auth {
-        AuthContext::Session(info) => Ok(info),
-        AuthContext::ApiKey(_) | AuthContext::Anonymous => Err(AppError::Unauthorized),
-    }
+    require_verified_session(auth)
 }
 
 /// Look up the caller's role in a specific tenant and enforce a minimum role.

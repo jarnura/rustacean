@@ -8,8 +8,8 @@ useDefault = true
 # Allowlist
 # ---------------------------------------------------------------------------
 #
-# Suppresses `rb_live_<short-suffix>` test fixtures in services/control-api
-# source files. A "short" suffix is 1–31 hex/alphanumeric characters; real
+# Suppresses test-fixture strings in services/control-api source files.
+# A "short" rb_live_ suffix is 1–31 hex/alphanumeric characters; real
 # API keys produced by `ApiKey::generate()` use exactly 32 lowercase hex
 # characters after the `rb_live_` prefix, so they are NOT covered here and
 # will still trigger a generic-api-key finding in CI.
@@ -26,11 +26,16 @@ useDefault = true
 # cannot retroactively silence the original-introducing commit.
 
 [allowlist]
-description = "rb_live_<short-suffix> test fixtures in services/control-api"
+description = "test fixtures in services/control-api"
 # Require BOTH the path AND the regex to match; otherwise findings in this
 # path with full-length keys (or with this regex elsewhere) would be allowed
-# unintentionally. With condition="AND", only short-suffix `rb_live_*`
-# strings inside services/control-api/src/**.rs are suppressed.
+# unintentionally. With condition="AND", only the listed regexes inside
+# services/control-api/src/**.rs are suppressed.
 condition = "AND"
-regexes = ['''rb_live_[a-z0-9]{1,31}\b''']
+regexes = [
+  # Short-suffix rb_live_ API key fixtures (not real 32-char keys)
+  '''rb_live_[a-z0-9]{1,31}\b''',
+  # verify-email unit test token fixture in routes/auth.rs
+  '''abc123def456''',
+]
 paths = ['''services/control-api/src/.*\.rs''']

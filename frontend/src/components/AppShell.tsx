@@ -18,6 +18,41 @@ export function AppShell({ children }: AppShellProps): JSX.Element {
           >
             Rustacean
           </Link>
+          <nav
+            aria-label="Primary"
+            className="hidden items-center gap-1 sm:flex"
+          >
+            <Link
+              to={routes.repos}
+              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              activeProps={{
+                className:
+                  "rounded-md px-3 py-1.5 text-sm font-medium text-foreground bg-accent",
+              }}
+            >
+              Repos
+            </Link>
+            <Link
+              to={routes.members}
+              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              activeProps={{
+                className:
+                  "rounded-md px-3 py-1.5 text-sm font-medium text-foreground bg-accent",
+              }}
+            >
+              Members
+            </Link>
+            <Link
+              to={routes.apiKeys}
+              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              activeProps={{
+                className:
+                  "rounded-md px-3 py-1.5 text-sm font-medium text-foreground bg-accent",
+              }}
+            >
+              API keys
+            </Link>
+          </nav>
           <div className="flex items-center gap-2">
             <ThemeToggle />
           </div>

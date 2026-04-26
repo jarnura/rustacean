@@ -14,6 +14,7 @@ export {
 } from "./useApiKeys";
 export {
   tenantMembersQueryKey,
+  useTenantMembers,
   useInviteMember,
   useUpdateMemberRole,
   useRemoveMember,

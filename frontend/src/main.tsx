@@ -1,9 +1,13 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter } from "react-router-dom";
+import { RouterProvider } from "@tanstack/react-router";
+import { ErrorBoundary } from "react-error-boundary";
 import { Toaster } from "sonner";
-import { App } from "./App";
+import { AppErrorFallback } from "@/components/AppErrorFallback";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { router } from "@/router";
+import "@/index.css";
 import "./styles/auth.css";
 
 const queryClient = new QueryClient({
@@ -32,11 +36,13 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-      <Toaster richColors position="top-right" />
-    </QueryClientProvider>
+    <ErrorBoundary FallbackComponent={AppErrorFallback}>
+      <ThemeProvider defaultTheme="system">
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+          <Toaster richColors position="top-right" />
+        </QueryClientProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

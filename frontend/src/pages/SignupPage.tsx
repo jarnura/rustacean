@@ -2,7 +2,7 @@
 // paste the token from the verification email.
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useSignup } from "@/api";
 import { AuthLayout } from "@/components/auth/AuthLayout";
@@ -32,7 +32,7 @@ export function SignupPage(): JSX.Element {
     try {
       await signup.mutateAsync(values);
       toast.success("Account created — check your email for the verification link.");
-      navigate(routes.verifyEmail, { replace: true });
+      void navigate({ to: routes.verifyEmail, replace: true });
     } catch (error) {
       toast.error(formatApiError(error, "Could not create your account."));
     }

@@ -1,7 +1,7 @@
 // REQ-FE-02: temporary landing destination after login. The real /repos
 // experience and protected-route gating ship with REQ-FE-01 (RUSAA-41).
 // This stub exists only so the post-login redirect resolves to a real route.
-import { Link } from "react-router-dom";
+import { Link } from "@tanstack/react-router";
 import { useMe } from "@/api";
 import { AuthLayout } from "@/components/auth/AuthLayout";
 import { routes } from "@/lib/routes";

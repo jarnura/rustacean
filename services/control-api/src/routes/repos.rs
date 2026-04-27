@@ -374,4 +374,24 @@ mod tests {
             "an ingestion run is already in progress for this repository"
         );
     }
+
+    #[test]
+    fn new_error_messages() {
+        assert_eq!(
+            AppError::GithubAppNotConfigured.to_string(),
+            "GitHub App is not configured on this instance"
+        );
+        assert_eq!(
+            AppError::RepoNotAccessible.to_string(),
+            "repository is not accessible via the given installation"
+        );
+        assert_eq!(
+            AppError::RepoAlreadyConnected.to_string(),
+            "repository is already connected to this tenant"
+        );
+        assert_eq!(
+            AppError::IngestRunAlreadyInFlight.to_string(),
+            "an ingestion run is already in progress for this repository"
+        );
+    }
 }

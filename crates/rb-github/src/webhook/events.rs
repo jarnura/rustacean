@@ -1,4 +1,5 @@
 // Typed webhook event enums — fully implemented in RUSAA-50 (REQ-GH-06).
+#![allow(dead_code)]
 //
 // Stubs only here so the module tree compiles. The route handler and
 // dispatcher are in RUSAA-50.
@@ -31,7 +32,7 @@ pub struct Installation {
 pub struct Account {
     pub login: String,
     #[serde(rename = "type")]
-    pub account_type: String,
+    pub kind: String,
     pub id: i64,
 }
 

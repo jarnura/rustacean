@@ -4,7 +4,7 @@ mod error;
 mod secret;
 mod state_token;
 mod token_cache;
-pub mod webhook;
+mod webhook;
 
 pub use client::{AppIdentity, AppOwner};
 pub use error::GhError;

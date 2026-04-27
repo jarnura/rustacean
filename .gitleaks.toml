@@ -39,3 +39,15 @@ regexes = [
   '''abc123def456''',
 ]
 paths = ['''services/control-api/src/.*\.rs''']
+
+# ---------------------------------------------------------------------------
+# Test-fixture private keys (rb-github unit tests)
+# ---------------------------------------------------------------------------
+# The RSA key in crates/rb-github/tests/fixtures/ is intentionally weak
+# (2048-bit test-only, never used in production) and committed solely to
+# drive the app_jwt unit test without network access.  Path-only match;
+# no content condition needed since the entire directory is test data.
+
+[[allowlists]]
+description = "test-fixture RSA keys in rb-github"
+paths = ['''crates/rb-github/tests/fixtures/.*''']

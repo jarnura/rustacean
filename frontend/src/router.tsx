@@ -8,8 +8,10 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 import { AppShell, GlobalSuspenseFallback } from "@/components/AppShell";
+import { ApiKeysPage } from "@/pages/ApiKeysPage";
 import { ForgotPasswordPage } from "@/pages/ForgotPasswordPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { MembersPage } from "@/pages/MembersPage";
 import { ReposPlaceholderPage } from "@/pages/ReposPlaceholderPage";
 import { ResetPasswordPage } from "@/pages/ResetPasswordPage";
 import { SignupPage } from "@/pages/SignupPage";
@@ -81,6 +83,18 @@ const reposRoute = createRoute({
   component: ReposPlaceholderPage,
 });
 
+const membersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: routes.members,
+  component: MembersPage,
+});
+
+const apiKeysRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: routes.apiKeys,
+  component: ApiKeysPage,
+});
+
 const catchAllRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "$",
@@ -98,6 +112,8 @@ const routeTree = rootRoute.addChildren([
   forgotPasswordRoute,
   resetPasswordRoute,
   reposRoute,
+  membersRoute,
+  apiKeysRoute,
   catchAllRoute,
 ]);
 

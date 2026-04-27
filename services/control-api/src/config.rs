@@ -18,6 +18,16 @@ pub struct Config {
     /// Whether to set the `Secure` flag on `rb_session` cookies.
     /// Set `RB_SECURE_COOKIES=false` when running behind an HTTP proxy in development.
     pub secure_cookies: bool,
+
+    // --- GitHub App (REQ-GH-01) ---
+    /// `RB_GH_APP_ID` — numeric GitHub App ID. Optional; GitHub routes
+    /// return 503 when absent.
+    pub gh_app_id: Option<i64>,
+    /// `RB_GH_APP_PRIVATE_KEY` — base64-encoded RSA PEM private key.
+    pub gh_app_private_key_b64: Option<String>,
+    /// `RB_GH_APP_WEBHOOK_SECRET` — shared secret for HMAC-SHA256 webhook
+    /// signature verification.
+    pub gh_app_webhook_secret: Option<String>,
 }
 
 impl Config {
@@ -62,6 +72,18 @@ impl Config {
                 .unwrap_or_else(|_| "control-api".to_owned()),
             secure_cookies: env::var("RB_SECURE_COOKIES")
                 .map_or(true, |v| !v.eq_ignore_ascii_case("false")),
+            gh_app_id: env::var("RB_GH_APP_ID")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .map(|s| s.parse::<i64>())
+                .transpose()
+                .context("RB_GH_APP_ID must be a positive integer")?,
+            gh_app_private_key_b64: env::var("RB_GH_APP_PRIVATE_KEY")
+                .ok()
+                .filter(|s| !s.is_empty()),
+            gh_app_webhook_secret: env::var("RB_GH_APP_WEBHOOK_SECRET")
+                .ok()
+                .filter(|s| !s.is_empty()),
         })
     }
 
@@ -83,6 +105,9 @@ impl Config {
             email_transport: "noop".to_owned(),
             service_name: "control-api-test".to_owned(),
             secure_cookies: true,
+            gh_app_id: None,
+            gh_app_private_key_b64: None,
+            gh_app_webhook_secret: None,
         }
     }
 }

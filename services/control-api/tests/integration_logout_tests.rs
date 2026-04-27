@@ -41,6 +41,9 @@ async fn real_db_state() -> Option<(AppState, PgPool)> {
         email_transport: "noop".to_owned(),
         service_name: "control-api-test".to_owned(),
         secure_cookies: true,
+        gh_app_id: None,
+        gh_app_private_key_b64: None,
+        gh_app_webhook_secret: None,
     };
     let state = AppState {
         pool: pool.clone(),
@@ -48,6 +51,7 @@ async fn real_db_state() -> Option<(AppState, PgPool)> {
         hasher: Arc::new(hasher),
         login_rate_limiter: Arc::new(LoginRateLimiter::new()),
         config: Arc::new(config),
+        gh: None,
     };
     Some((state, pool))
 }

@@ -1,0 +1,33 @@
+[package]
+name = "rb-github"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rb-secrets = { path = "../rb-secrets", version = "0.1.0" }
+rb-tracing = { path = "../rb-tracing", version = "0.1.0" }
+tokio.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+dashmap.workspace = true
+sha2.workspace = true
+rand.workspace = true
+jsonwebtoken.workspace = true
+reqwest.workspace = true
+base64.workspace = true
+hmac.workspace = true
+subtle.workspace = true
+moka.workspace = true
+hex.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lints]
+workspace = true

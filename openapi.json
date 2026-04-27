@@ -331,6 +331,31 @@
         }
       }
     },
+    "/v1/health/github-app": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Confirms that the GitHub App private key is valid and matches what GitHub\nknows. Uses a 60-second server-side cache to be safe for liveness probes.",
+        "description": "Returns 503 when `RB_GH_APP_ID` / `RB_GH_APP_PRIVATE_KEY` are not set.",
+        "operationId": "github_app_health",
+        "responses": {
+          "200": {
+            "description": "GitHub App identity confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubAppHealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "GitHub App not configured"
+          }
+        }
+      }
+    },
     "/v1/me": {
       "get": {
         "tags": [
@@ -788,6 +813,26 @@
           }
         }
       },
+      "GithubAppHealthResponse": {
+        "type": "object",
+        "required": [
+          "app_id",
+          "slug",
+          "owner"
+        ],
+        "properties": {
+          "app_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        }
+      },
       "InviteMemberRequest": {
         "type": "object",
         "required": [
@@ -1175,6 +1220,10 @@
     {
       "name": "api_keys",
       "description": "API key management"
+    },
+    {
+      "name": "github",
+      "description": "GitHub App integration"
     }
   ]
 }

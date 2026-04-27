@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
+use base64::Engine as _;
+use jsonwebtoken::EncodingKey;
 use rb_auth::{LoginRateLimiter, PasswordHasher};
 use rb_email::{SmtpConfig, from_transport};
+use rb_github::{GhApp, Secret};
 use sqlx::postgres::PgPoolOptions;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -46,12 +49,15 @@ pub async fn run(config: Config) -> Result<()> {
     )
     .context("invalid argon2 parameters")?;
 
+    let gh = build_gh_app(&config)?;
+
     let state = AppState {
         pool,
         email_sender: Arc::from(email_sender),
         hasher: Arc::new(hasher),
         login_rate_limiter: Arc::new(LoginRateLimiter::new()),
         config: Arc::new(config.clone()),
+        gh: gh.map(Arc::new),
     };
 
     let cors = CorsLayer::new()
@@ -73,6 +79,45 @@ pub async fn run(config: Config) -> Result<()> {
         .await?;
 
     Ok(())
+}
+
+/// Constructs a [`GhApp`] from config, or returns `None` when the GitHub App
+/// env vars are not set (feature is disabled; GitHub routes return 503).
+///
+/// Fails fast at startup if keys are present but malformed — an operator
+/// mistake should surface immediately, not at first API call.
+fn build_gh_app(config: &Config) -> Result<Option<GhApp>> {
+    let (Some(app_id), Some(pem_b64)) = (config.gh_app_id, config.gh_app_private_key_b64.as_deref()) else {
+        tracing::info!("RB_GH_APP_ID / RB_GH_APP_PRIVATE_KEY not set — GitHub App disabled");
+        return Ok(None);
+    };
+
+    let pem = base64::engine::general_purpose::STANDARD
+        .decode(pem_b64)
+        .context("RB_GH_APP_PRIVATE_KEY must be base64-encoded PEM")?;
+
+    let encoding_key = EncodingKey::from_rsa_pem(&pem)
+        .context("RB_GH_APP_PRIVATE_KEY must be a valid RSA PEM private key")?;
+
+    // Zeroize raw PEM bytes now that the opaque key has been derived.
+    drop(pem);
+
+    let webhook_secret_bytes = config
+        .gh_app_webhook_secret
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "RB_GH_APP_WEBHOOK_SECRET must be set when GitHub App is enabled. \
+                 An absent or empty webhook secret allows any caller to forge webhook \
+                 payloads — set this env var before enabling real webhook delivery."
+            )
+        })?
+        .as_bytes()
+        .to_vec();
+    let webhook_secret = Secret::new(webhook_secret_bytes);
+
+    Ok(Some(GhApp::new(app_id, encoding_key, webhook_secret)))
 }
 
 async fn shutdown_signal() {

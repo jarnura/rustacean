@@ -221,6 +221,27 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/health/github-app": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Confirms that the GitHub App private key is valid and matches what GitHub
+         *     knows. Uses a 60-second server-side cache to be safe for liveness probes.
+         * @description Returns 503 when `RB_GH_APP_ID` / `RB_GH_APP_PRIVATE_KEY` are not set.
+         */
+        readonly get: operations["github_app_health"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/me": {
         readonly parameters: {
             readonly query?: never;
@@ -401,6 +422,12 @@ export interface components {
         readonly ForgotPasswordRequest: {
             /** @description Email address for the account to recover. */
             readonly email: string;
+        };
+        readonly GithubAppHealthResponse: {
+            /** Format: int64 */
+            readonly app_id: number;
+            readonly owner: string;
+            readonly slug: string;
         };
         readonly InviteMemberRequest: {
             /** @description Email address of the user to invite or add. */
@@ -867,6 +894,33 @@ export interface operations {
             };
             /** @description Token expired, already used, or not found (invalid_token) */
             readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly github_app_health: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description GitHub App identity confirmed */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["GithubAppHealthResponse"];
+                };
+            };
+            /** @description GitHub App not configured */
+            readonly 503: {
                 headers: {
                     readonly [name: string]: unknown;
                 };

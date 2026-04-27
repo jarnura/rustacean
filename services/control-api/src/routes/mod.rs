@@ -2,6 +2,7 @@ pub mod api_keys;
 pub mod auth;
 pub mod auth_logout;
 pub mod auth_verify;
+pub mod github;
 pub mod health;
 pub mod me;
 pub mod tenants;
@@ -13,6 +14,7 @@ use crate::routes::{
     auth::{forgot_password, login, reset_password, signup},
     auth_logout::logout,
     auth_verify::verify_email,
+    github::health::github_app_health,
     health::{health_check, openapi_json, ready_check},
     me::{get_me, switch_tenant},
     tenants::{invite_member, list_members, remove_member, transfer_ownership, update_member_role},
@@ -40,5 +42,6 @@ pub fn build(state: AppState) -> Router {
         .route("/v1/tenants/{id}/members/{uid}/role", put(update_member_role))
         .route("/v1/tenants/{id}/members/{uid}", delete(remove_member))
         .route("/v1/tenants/{id}/transfer-ownership", post(transfer_ownership))
+        .route("/v1/health/github-app", get(github_app_health))
         .with_state(state)
 }

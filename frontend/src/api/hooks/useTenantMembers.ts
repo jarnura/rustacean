@@ -1,8 +1,14 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryOptions,
+} from "@tanstack/react-query";
 import { apiClient, toApiError, type ApiError } from "../client";
 import type { components } from "../generated/schema";
 import { meQueryKey } from "./useMe";
 
+type ListMembersResponse = components["schemas"]["ListMembersResponse"];
 type InviteMemberRequest = components["schemas"]["InviteMemberRequest"];
 type InviteMemberResponse = components["schemas"]["InviteMemberResponse"];
 type UpdateRoleRequest = components["schemas"]["UpdateRoleRequest"];
@@ -12,6 +18,30 @@ type TransferOwnershipRequest =
 
 export const tenantMembersQueryKey = (tenantId: string) =>
   ["tenants", tenantId, "members"] as const;
+
+export function useTenantMembers(
+  tenantId: string,
+  options?: Omit<
+    UseQueryOptions<ListMembersResponse, ApiError>,
+    "queryKey" | "queryFn"
+  >,
+) {
+  return useQuery<ListMembersResponse, ApiError>({
+    queryKey: tenantMembersQueryKey(tenantId),
+    queryFn: async () => {
+      const { data, error, response } = await apiClient.GET(
+        "/v1/tenants/{id}/members",
+        { params: { path: { id: tenantId } } },
+      );
+      if (error || !data) {
+        throw toApiError(response.status, error);
+      }
+      return data;
+    },
+    enabled: tenantId.length > 0,
+    ...options,
+  });
+}
 
 export function useInviteMember(tenantId: string) {
   const qc = useQueryClient();

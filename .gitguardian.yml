@@ -1,0 +1,8 @@
+version: 2
+
+# Paths excluded from GitGuardian scanning.
+# Each entry is a glob matched against the file path relative to the repo root.
+ignored-paths:
+  # Deliberately weak RSA key used only for rb-github unit tests (app_jwt.rs).
+  # The key is 2048-bit test-only and is never used in any environment.
+  - crates/rb-github/tests/fixtures/**

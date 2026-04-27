@@ -6,6 +6,8 @@ export const routes = {
   forgotPassword: "/forgot-password",
   resetPassword: "/reset-password",
   repos: "/repos",
+  members: "/members",
+  apiKeys: "/api-keys",
 } as const;
 
 export type RoutePath = (typeof routes)[keyof typeof routes];

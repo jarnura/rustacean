@@ -281,6 +281,18 @@ services:
       kafka:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
+    image: rustbrain/frontend:dev
+    ports:
+      - "${FRONTEND_HOST_PORT:-15173}:80"
+    networks:
+      - rb-net
+    depends_on:
+      - control-api
+
 networks:
   rb-net:
     driver: bridge

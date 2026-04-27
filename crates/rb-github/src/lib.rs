@@ -1,6 +1,7 @@
 mod app_jwt;
 mod client;
 mod error;
+mod installation_token;
 mod secret;
 mod state_token;
 mod token_cache;
@@ -10,7 +11,7 @@ pub use client::{AppIdentity, AppOwner};
 pub use error::GhError;
 pub use secret::Secret;
 pub use state_token::hash_token;
-pub use token_cache::CachedToken;
+pub use token_cache::{CachedToken, MintFuture, TokenCache, TokenMinter, SAFETY_MARGIN};
 pub use webhook::{
     Account, Installation, InstallationEvent, InstallationPayload, InstallationReposPayload,
     InstallationRepositoriesEvent, RepoRef, ReplayCache, verify_signature,
@@ -22,6 +23,8 @@ use std::time::Duration;
 use jsonwebtoken::EncodingKey;
 use moka::future::Cache;
 use reqwest::Client;
+
+use installation_token::GitHubTokenMinter;
 
 /// The central handle for all GitHub App operations.
 ///
@@ -39,6 +42,8 @@ pub struct GhApp {
     /// Cached response from `GET /app` (60 s TTL) to avoid hammering GitHub
     /// from k8s liveness probes.
     identity_cache: Arc<Cache<(), AppIdentity>>,
+    /// Per-installation access-token cache (REQ-GH-05).
+    pub token_cache: Arc<TokenCache>,
     /// Shared HTTP client.
     http: Client,
 }
@@ -61,12 +66,20 @@ impl GhApp {
             .build()
             .expect("reqwest client init is infallible with valid config");
 
+        let minter: Arc<dyn TokenMinter> = Arc::new(GitHubTokenMinter::new(
+            app_id,
+            encoding_key.clone(),
+            http.clone(),
+        ));
+        let token_cache = TokenCache::new(minter);
+
         Self {
             app_id,
             encoding_key,
             webhook_secret,
             replay_cache: ReplayCache::new(),
             identity_cache: Arc::new(identity_cache),
+            token_cache,
             http,
         }
     }
@@ -100,6 +113,27 @@ impl GhApp {
                 status: 500,
                 body: "identity cache miss immediately after insert".to_owned(),
             })
+    }
+
+    /// Returns a usable installation access token, minting if absent or
+    /// near expiry (REQ-GH-05). Warm hits are sub-millisecond.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhError`] if the App JWT cannot be minted or the GitHub
+    /// `POST /app/installations/{id}/access_tokens` call fails.
+    pub async fn installation_token(
+        &self,
+        installation_id: i64,
+    ) -> Result<Secret<String>, GhError> {
+        self.token_cache.get_or_mint(installation_id).await
+    }
+
+    /// Spawns the periodic eviction sweep for the installation-token cache.
+    /// Must be called from inside a tokio runtime, typically once at server
+    /// startup right after [`GhApp::new`].
+    pub fn start_token_sweep(&self) {
+        self.token_cache.start_sweep();
     }
 }
 

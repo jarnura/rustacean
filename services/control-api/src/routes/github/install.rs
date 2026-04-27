@@ -102,7 +102,7 @@ pub struct CallbackResponse {
     pub account_type: String,
 }
 
-/// Validate the state token and create (or reactivate) the github_installations row.
+/// Validate the state token and create (or reactivate) the `github_installations` row.
 ///
 /// The state token lookup is atomic — a single `UPDATE ... RETURNING` that
 /// validates expiry and single-use constraint together. The installation row
@@ -115,7 +115,9 @@ pub async fn github_callback(
     let gh = state.gh.as_ref().ok_or(AppError::GitHubAppNotConfigured)?;
 
     // Atomically validate and consume the state token.
-    let token_hash = rb_github::hash_token(params.state.as_bytes());
+    // Decode hex first — install-url hashes raw bytes, so callback must too.
+    let raw = hex::decode(&params.state).map_err(|_| AppError::InvalidToken)?;
+    let token_hash = rb_github::hash_token(&raw);
     let row: Option<(Uuid, Uuid)> = sqlx::query_as(
         "UPDATE control.github_install_states \
          SET used_at = now() \
@@ -214,5 +216,28 @@ mod tests {
         assert_eq!(v["installation_id"], 42);
         assert_eq!(v["account_login"], "octo-org");
         assert_eq!(v["account_type"], "Organization");
+    }
+
+    /// Round-trip: install-url generates hex(raw), hashes raw bytes.
+    /// Callback receives hex string, decodes to raw, hashes raw bytes.
+    /// Both sides must produce the same digest.
+    #[test]
+    fn state_token_round_trip() {
+        let raw = [0xdeu8; 32];
+        let token_hex = hex::encode(raw);
+
+        // install-url path
+        let hash_at_generation = rb_github::hash_token(&raw);
+
+        // callback path: decode hex then hash
+        let decoded = hex::decode(&token_hex).unwrap();
+        let hash_at_callback = rb_github::hash_token(&decoded);
+
+        assert_eq!(hash_at_generation, hash_at_callback);
+    }
+
+    #[test]
+    fn state_token_invalid_hex_is_rejected() {
+        assert!(hex::decode("not-valid-hex!").is_err());
     }
 }

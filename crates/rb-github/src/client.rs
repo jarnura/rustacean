@@ -17,32 +17,19 @@ pub struct AppOwner {
 }
 
 /// Response from `GET https://api.github.com/app/installations/{id}`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct InstallationInfo {
     pub id: i64,
     pub account: InstallationAccount,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct InstallationAccount {
     pub login: String,
     /// `User` or `Organization` — matches the DB constraint in `github_installations`.
     #[serde(rename = "type")]
     pub kind: String,
     pub id: i64,
-}
-
-impl Clone for InstallationInfo {
-    fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            account: InstallationAccount {
-                login: self.account.login.clone(),
-                kind: self.account.kind.clone(),
-                id: self.account.id,
-            },
-        }
-    }
 }
 
 /// Fetches the GitHub App's own identity by calling `GET /app` with an App JWT.

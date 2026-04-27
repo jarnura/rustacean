@@ -30,6 +30,11 @@ impl ReplayCache {
 
     /// Attempts to insert `delivery_id`. Returns `true` if it was new
     /// (caller should process), `false` if it was already seen (replay, skip).
+    ///
+    /// Note: `contains_key` + `insert` is not atomic (TOCTOU). Two concurrent
+    /// deliveries with the same ID could both pass the check and both be
+    /// processed. Acceptable for the stub; will be replaced with the moka
+    /// `entry()` API in RUSAA-50 (REQ-GH-06) when the full dispatcher lands.
     pub async fn insert_if_new(&self, delivery_id: &str) -> bool {
         if self.inner.contains_key(delivery_id) {
             return false;

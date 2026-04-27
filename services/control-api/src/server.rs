@@ -102,14 +102,20 @@ fn build_gh_app(config: &Config) -> Result<Option<GhApp>> {
     // Zeroize raw PEM bytes now that the opaque key has been derived.
     drop(pem);
 
-    let webhook_secret = Secret::new(
-        config
-            .gh_app_webhook_secret
-            .as_deref()
-            .unwrap_or("dev-secret-do-not-use-in-prod")
-            .as_bytes()
-            .to_vec(),
-    );
+    let webhook_secret_bytes = config
+        .gh_app_webhook_secret
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "RB_GH_APP_WEBHOOK_SECRET must be set when GitHub App is enabled. \
+                 An absent or empty webhook secret allows any caller to forge webhook \
+                 payloads — set this env var before enabling real webhook delivery."
+            )
+        })?
+        .as_bytes()
+        .to_vec();
+    let webhook_secret = Secret::new(webhook_secret_bytes);
 
     Ok(Some(GhApp::new(app_id, encoding_key, webhook_secret)))
 }

@@ -5,6 +5,7 @@ pub mod auth_verify;
 pub mod github;
 pub mod health;
 pub mod me;
+pub mod repos;
 pub mod tenants;
 
 use axum::{Router, routing::{delete, get, post, put}};
@@ -18,6 +19,7 @@ use crate::routes::{
     github::webhook::github_webhook,
     health::{health_check, openapi_json, ready_check},
     me::{get_me, switch_tenant},
+    repos::connect_repo,
     tenants::{invite_member, list_members, remove_member, transfer_ownership, update_member_role},
 };
 use crate::state::AppState;
@@ -45,5 +47,6 @@ pub fn build(state: AppState) -> Router {
         .route("/v1/tenants/{id}/transfer-ownership", post(transfer_ownership))
         .route("/v1/health/github-app", get(github_app_health))
         .route("/v1/github/webhook", post(github_webhook))
+        .route("/v1/repos", post(connect_repo))
         .with_state(state)
 }

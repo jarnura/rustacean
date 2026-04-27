@@ -16,6 +16,19 @@ pub struct AppOwner {
     pub login: String,
 }
 
+/// Repository details returned by `GET /repositories/{id}`.
+#[derive(Debug)]
+pub struct RepoInfo {
+    pub full_name: String,
+    pub default_branch: String,
+}
+
+#[derive(Deserialize)]
+struct GhRepoResponse {
+    full_name: String,
+    default_branch: String,
+}
+
 /// Fetches the GitHub App's own identity by calling `GET /app` with an App JWT.
 ///
 /// Used by `GET /v1/health/github-app` to confirm the private key is valid
@@ -41,4 +54,36 @@ pub async fn fetch_app_identity(
     }
 
     Ok(resp.json::<AppIdentity>().await?)
+}
+
+/// Fetches a repository by its GitHub numeric ID using an installation access token.
+///
+/// Returns `GhError::ApiError { status: 404, .. }` when the repo is not found or
+/// not accessible via this installation token.
+pub(crate) async fn fetch_repo_by_id(
+    http: &Client,
+    installation_token: &str,
+    repo_id: i64,
+) -> Result<RepoInfo, GhError> {
+    let url = format!("https://api.github.com/repositories/{repo_id}");
+    let resp = http
+        .get(&url)
+        .header("Authorization", format!("Bearer {installation_token}"))
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .header("User-Agent", "rust-brain/1.0")
+        .send()
+        .await?;
+
+    let status = resp.status().as_u16();
+    if !resp.status().is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        return Err(GhError::ApiError { status, body });
+    }
+
+    let raw = resp.json::<GhRepoResponse>().await?;
+    Ok(RepoInfo {
+        full_name: raw.full_name,
+        default_branch: raw.default_branch,
+    })
 }

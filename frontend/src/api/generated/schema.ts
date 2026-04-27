@@ -288,6 +288,28 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/repos": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Connect a GitHub repository to the calling user's active tenant.
+         * @description Verifies the installation belongs to the session tenant, confirms the repo
+         *     is accessible via GitHub's API, then inserts a `repos` row with
+         *     `status = 'connected'`.
+         */
+        readonly post: operations["connect_repo"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/tenants/{id}/members": {
         readonly parameters: {
             readonly query?: never;
@@ -395,6 +417,26 @@ export interface components {
             readonly last_used_at?: string | null;
             readonly name: string;
             readonly scopes: readonly components["schemas"]["Scope"][];
+        };
+        readonly ConnectRepoRequest: {
+            /** @description Default branch override. If omitted, the value is fetched from GitHub. */
+            readonly default_branch?: string | null;
+            /**
+             * Format: int64
+             * @description GitHub numeric repository ID (from the list-repos response).
+             */
+            readonly github_repo_id: number;
+            /**
+             * Format: int64
+             * @description GitHub numeric installation ID (from the App install callback).
+             */
+            readonly installation_id: number;
+        };
+        readonly ConnectRepoResponse: {
+            readonly default_branch: string;
+            readonly full_name: string;
+            /** Format: uuid */
+            readonly repo_id: string;
         };
         readonly CreateApiKeyRequest: {
             /** @description Human-readable label for the key. */
@@ -1000,6 +1042,72 @@ export interface operations {
             };
             /** @description Target tenant not found or inactive */
             readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly connect_repo: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["ConnectRepoRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Repository connected */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ConnectRepoResponse"];
+                };
+            };
+            /** @description Not authenticated or session expired */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email not verified */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Installation not found or not owned by this tenant */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Repository already connected (repo_already_connected) */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Repository not accessible via installation (repo_not_accessible) */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description GitHub App not configured on this instance */
+            readonly 503: {
                 headers: {
                     readonly [name: string]: unknown;
                 };

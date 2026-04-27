@@ -21,7 +21,7 @@ use crate::routes::{
     github::webhook::github_webhook,
     health::{health_check, openapi_json, ready_check},
     me::{get_me, switch_tenant},
-    repos::{connect_repo, trigger_ingest},
+    repos::{connect_repo, list_repos, trigger_ingest},
     tenants::{invite_member, list_members, remove_member, transfer_ownership, update_member_role},
 };
 use crate::state::AppState;
@@ -51,7 +51,7 @@ pub fn build(state: AppState) -> Router {
         .route("/v1/github/install-url", get(github_install_url))
         .route("/v1/github/callback", get(github_callback))
         .route("/v1/github/installations/{id}/available-repos", get(list_available_repos))
-        .route("/v1/repos", post(connect_repo))
+        .route("/v1/repos", post(connect_repo).get(list_repos))
         .route("/v1/repos/{id}/ingest", post(trigger_ingest))
         .with_state(state)
 }

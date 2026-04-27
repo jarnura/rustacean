@@ -1,7 +1,3 @@
-// REQ-FE-09: tenant member management. Lists every member of the active
-// tenant and exposes invite / role-change / remove / transfer-ownership for
-// admins and owners. Backed by /v1/tenants/{id}/members and
-// /v1/tenants/{id}/transfer-ownership (RUSAA-36 wave 2).
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";

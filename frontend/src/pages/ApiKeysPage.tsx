@@ -1,7 +1,5 @@
-// REQ-FE-09: API key management. Lists API keys for the active tenant and
-// supports create (key shown exactly once) and revoke. Backed by /v1/api-keys
-// (RUSAA-36 wave 2). Plaintext key is never re-fetchable from the server, so
-// the create response is surfaced in a one-shot panel with a copy action.
+// Plaintext key is never re-fetchable from the server, so the create
+// response is surfaced in a one-shot panel with a copy action.
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";

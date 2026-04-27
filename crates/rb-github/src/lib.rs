@@ -8,7 +8,7 @@ mod state_token;
 mod token_cache;
 mod webhook;
 
-pub use client::{AppIdentity, AppOwner};
+pub use client::{AppIdentity, AppOwner, InstallationInfo};
 pub use error::GhError;
 pub use repos::{RepoItem, RepoPage};
 pub use secret::Secret;
@@ -149,6 +149,23 @@ impl GhApp {
     ) -> Result<repos::RepoPage, GhError> {
         let token = self.token_cache.get_or_mint(installation_id).await?;
         repos::list_installation_repos(token.expose(), &self.http, page, per_page).await
+    }
+
+    /// Fetches metadata for a specific GitHub App installation using the App JWT.
+    ///
+    /// Called by `GET /v1/github/callback` (REQ-GH-02) to look up
+    /// `account_login`, `account_type`, and `account_id` before writing the
+    /// `github_installations` row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhError`] if the App JWT cannot be minted or the GitHub API
+    /// call returns a non-2xx response.
+    pub async fn fetch_installation(
+        &self,
+        installation_id: i64,
+    ) -> Result<client::InstallationInfo, GhError> {
+        client::fetch_installation(self, &self.http, installation_id).await
     }
 
     /// Spawns the periodic eviction sweep for the installation-token cache.

@@ -13,6 +13,9 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
         health::health_check,
         health::ready_check,
         github::health::github_app_health,
+        // github::webhook::github_webhook is intentionally NOT exposed via OpenAPI:
+        // it is consumed only by GitHub's webhook delivery service, authenticated
+        // by HMAC, and has no schema representation for HeaderMap/Bytes extractors.
         auth::signup,
         auth::login,
         auth_logout::logout,

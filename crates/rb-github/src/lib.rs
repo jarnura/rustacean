@@ -11,7 +11,10 @@ pub use error::GhError;
 pub use secret::Secret;
 pub use state_token::hash_token;
 pub use token_cache::CachedToken;
-pub use webhook::{ReplayCache, verify_signature};
+pub use webhook::{
+    Account, Installation, InstallationEvent, InstallationPayload, InstallationReposPayload,
+    InstallationRepositoriesEvent, RepoRef, ReplayCache, verify_signature,
+};
 
 use std::sync::Arc;
 use std::time::Duration;

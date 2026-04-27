@@ -5,13 +5,14 @@
 
 use utoipa::OpenApi;
 
-use crate::routes::{api_keys, auth, auth_logout, auth_verify, health, me, tenants};
+use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me, tenants};
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
         health::health_check,
         health::ready_check,
+        github::health::github_app_health,
         auth::signup,
         auth::login,
         auth_logout::logout,
@@ -32,6 +33,7 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, health, me, tenant
     components(
         schemas(
             health::ProbeResponse,
+            github::health::GithubAppHealthResponse,
             auth::SignupRequest,
             auth::SignupResponse,
             auth::LoginRequest,
@@ -73,6 +75,7 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, health, me, tenant
         (name = "me", description = "Current-user and session endpoints"),
         (name = "tenants", description = "Tenant membership and role management"),
         (name = "api_keys", description = "API key management"),
+        (name = "github", description = "GitHub App integration"),
     ),
 )]
 pub struct ApiDoc;

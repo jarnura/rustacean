@@ -217,10 +217,13 @@ services:
     environment:
       RB_DATABASE_URL: postgres://rustbrain:rustbrain@postgres:5432/rustbrain
       RB_LISTEN_ADDR: "0.0.0.0:8080"
-      RB_CORS_ORIGINS: "${RB_CORS_ORIGINS:-http://localhost:5173}"
+      RB_CORS_ORIGINS: "${RB_CORS_ORIGINS:-http://localhost:15173}"
       RB_BASE_URL: "${RB_BASE_URL:-http://localhost:8080}"
       RB_EMAIL_TRANSPORT: console
       RB_SECURE_COOKIES: "${RB_SECURE_COOKIES:-false}"
+      RB_GH_APP_ID: "${RB_GH_APP_ID:-}"
+      RB_GH_APP_PRIVATE_KEY: "${RB_GH_APP_PRIVATE_KEY:-}"
+      RB_GH_APP_WEBHOOK_SECRET: "${RB_GH_APP_WEBHOOK_SECRET:-dev-secret-do-not-use-in-prod}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
       OTEL_SERVICE_NAME: control-api
       RUST_LOG: "info,control_api=debug"

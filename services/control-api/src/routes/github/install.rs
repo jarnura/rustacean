@@ -103,7 +103,7 @@ pub struct CallbackResponse {
     ),
     responses(
         (status = 200, description = "Installation created or updated", body = CallbackResponse),
-        (status = 401, description = "Invalid or expired state token"),
+        (status = 400, description = "Invalid or expired state token"),
         (status = 503, description = "GitHub App not configured on this instance"),
     ),
     tag = "github"

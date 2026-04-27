@@ -1048,7 +1048,7 @@ export interface operations {
                 };
             };
             /** @description Invalid or expired state token */
-            readonly 401: {
+            readonly 400: {
                 headers: {
                     readonly [name: string]: unknown;
                 };

@@ -378,7 +378,7 @@
               }
             }
           },
-          "401": {
+          "400": {
             "description": "Invalid or expired state token"
           },
           "503": {

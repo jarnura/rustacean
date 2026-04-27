@@ -7,7 +7,7 @@ mod state_token;
 mod token_cache;
 mod webhook;
 
-pub use client::{AppIdentity, AppOwner};
+pub use client::{AppIdentity, AppOwner, RepoInfo};
 pub use error::GhError;
 pub use secret::Secret;
 pub use state_token::hash_token;
@@ -127,6 +127,26 @@ impl GhApp {
         installation_id: i64,
     ) -> Result<Secret<String>, GhError> {
         self.token_cache.get_or_mint(installation_id).await
+    }
+
+    /// Fetches a repository by GitHub numeric ID, confirming it is accessible
+    /// via the given installation.
+    ///
+    /// Mints (or reuses a cached) installation access token, then calls
+    /// `GET /repositories/{repo_id}` on GitHub's API.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhError::ApiError { status: 404, .. }`] when the repo does not
+    /// exist or is not accessible through this installation. Other GitHub API
+    /// errors and token-minting failures propagate as [`GhError`].
+    pub async fn fetch_repo(
+        &self,
+        installation_id: i64,
+        repo_id: i64,
+    ) -> Result<RepoInfo, GhError> {
+        let token = self.installation_token(installation_id).await?;
+        client::fetch_repo_by_id(&self.http, token.expose(), repo_id).await
     }
 
     /// Spawns the periodic eviction sweep for the installation-token cache.

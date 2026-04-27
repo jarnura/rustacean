@@ -45,6 +45,12 @@ pub enum AppError {
     SessionExpired,
     #[error("email address not yet verified")]
     EmailNotVerified,
+    #[error("GitHub App is not configured on this instance")]
+    GithubAppNotConfigured,
+    #[error("repository is not accessible via the given installation")]
+    RepoNotAccessible,
+    #[error("repository is already connected to this tenant")]
+    RepoAlreadyConnected,
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
     #[error("auth error: {0}")]
@@ -93,6 +99,19 @@ impl IntoResponse for AppError {
             }
             AppError::EmailNotVerified => {
                 (StatusCode::FORBIDDEN, "email_not_verified", self.to_string())
+            }
+            AppError::GithubAppNotConfigured => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "github_app_not_configured",
+                self.to_string(),
+            ),
+            AppError::RepoNotAccessible => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "repo_not_accessible",
+                self.to_string(),
+            ),
+            AppError::RepoAlreadyConnected => {
+                (StatusCode::CONFLICT, "repo_already_connected", self.to_string())
             }
             AppError::Database(e) => {
                 tracing::error!(error = %e, "database error");

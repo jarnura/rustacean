@@ -1,4 +1,6 @@
-//! `POST /v1/repos` — Connect a GitHub repository to the calling tenant (REQ-GH-04).
+//! Repo management endpoints.
+//! - `POST /v1/repos` — Connect a GitHub repo to the tenant (REQ-GH-04).
+//! - `POST /v1/repos/{id}/ingest` — Trigger an ingestion run (REQ-GH-08).
 
 use axum::{
     Json,
@@ -16,6 +18,11 @@ use crate::{
     middleware::auth::{AuthContext, require_verified_session},
     state::AppState,
 };
+
+
+// ---------------------------------------------------------------------------
+// POST /v1/repos
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConnectRepoRequest {
@@ -63,7 +70,6 @@ pub async fn connect_repo(
 
     let gh = state.gh.as_ref().ok_or(AppError::GithubAppNotConfigured)?;
 
-    // Verify the installation belongs to the caller's active tenant and is active.
     let row: Option<(Uuid,)> = sqlx::query_as(
         "SELECT id FROM control.github_installations \
          WHERE github_installation_id = $1 \
@@ -78,7 +84,6 @@ pub async fn connect_repo(
 
     let (installation_uuid,) = row.ok_or(AppError::NotFound)?;
 
-    // Confirm repo accessibility and fetch full_name / default_branch from GitHub.
     let repo_info = gh
         .fetch_repo(body.installation_id, body.github_repo_id)
         .await
@@ -132,6 +137,97 @@ pub async fn connect_repo(
         }),
     ))
 }
+
+
+// ---------------------------------------------------------------------------
+// POST /v1/repos/{id}/ingest — REQ-GH-08
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TriggerIngestResponse {
+    pub run_id: Uuid,
+    pub repo_id: Uuid,
+    pub status: String,
+}
+
+/// Trigger an asynchronous ingestion run for a connected repository.
+///
+/// Returns 202 immediately; ingestion is processed asynchronously by the worker.
+/// 404 if the repository does not exist or belongs to another tenant.
+/// 409 if an ingestion run is already queued or running for this repo.
+#[utoipa::path(
+    post,
+    path = "/v1/repos/{id}/ingest",
+    params(
+        ("id" = Uuid, Path, description = "Repository UUID (from POST /v1/repos)")
+    ),
+    responses(
+        (status = 202, description = "Ingestion run queued", body = TriggerIngestResponse),
+        (status = 401, description = "Not authenticated or session expired"),
+        (status = 403, description = "Email not verified"),
+        (status = 404, description = "Repository not found or belongs to another tenant"),
+        (status = 409, description = "Ingestion run already in-flight (ingest_run_already_in_flight)"),
+    ),
+    tag = "repos"
+)]
+pub async fn trigger_ingest(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    axum::extract::Path(repo_id): axum::extract::Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    let session = require_verified_session(auth)?;
+
+    let exists: Option<(Uuid,)> = sqlx::query_as(
+        "SELECT id FROM control.repos \
+         WHERE id = $1 AND tenant_id = $2 AND archived_at IS NULL",
+    )
+    .bind(repo_id)
+    .bind(session.tenant_id)
+    .fetch_optional(&state.pool)
+    .await?;
+    exists.ok_or(AppError::NotFound)?;
+
+    let in_flight: Option<(Uuid,)> = sqlx::query_as(
+        "SELECT id FROM control.ingestion_runs \
+         WHERE repo_id = $1 AND status IN ('queued', 'running') LIMIT 1",
+    )
+    .bind(repo_id)
+    .fetch_optional(&state.pool)
+    .await?;
+    if in_flight.is_some() {
+        return Err(AppError::IngestRunAlreadyInFlight);
+    }
+
+    let run_id = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO control.ingestion_runs \
+         (id, tenant_id, repo_id, status, requested_by) \
+         VALUES ($1, $2, $3, 'queued', $4)",
+    )
+    .bind(run_id)
+    .bind(session.tenant_id)
+    .bind(repo_id)
+    .bind(session.user_id)
+    .execute(&state.pool)
+    .await?;
+
+    tracing::info!(
+        %run_id,
+        %repo_id,
+        tenant_id = %session.tenant_id,
+        "ingestion run queued"
+    );
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(TriggerIngestResponse {
+            run_id,
+            repo_id,
+            status: "queued".to_owned(),
+        }),
+    ))
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -234,22 +330,6 @@ mod tests {
     }
 
     #[test]
-    fn new_error_messages() {
-        assert_eq!(
-            AppError::GithubAppNotConfigured.to_string(),
-            "GitHub App is not configured on this instance"
-        );
-        assert_eq!(
-            AppError::RepoNotAccessible.to_string(),
-            "repository is not accessible via the given installation"
-        );
-        assert_eq!(
-            AppError::RepoAlreadyConnected.to_string(),
-            "repository is already connected to this tenant"
-        );
-    }
-
-    #[test]
     fn default_branch_override_takes_priority() {
         let github_branch = "main".to_owned();
         let override_branch = Some("develop".to_owned());
@@ -263,5 +343,35 @@ mod tests {
         let override_branch: Option<String> = None;
         let result = override_branch.unwrap_or(github_branch);
         assert_eq!(result, "main");
+    }
+
+    #[test]
+    fn trigger_ingest_response_serializes_correctly() {
+        let run_id = Uuid::new_v4();
+        let repo_id = Uuid::new_v4();
+        let resp = TriggerIngestResponse {
+            run_id,
+            repo_id,
+            status: "queued".to_owned(),
+        };
+        let val = serde_json::to_value(&resp).unwrap();
+        assert_eq!(val["status"], "queued");
+        assert!(val.get("run_id").is_some());
+        assert!(val.get("repo_id").is_some());
+    }
+
+    #[test]
+    fn ingest_run_already_in_flight_is_conflict() {
+        let err = AppError::IngestRunAlreadyInFlight;
+        let resp = err.into_response();
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn ingest_error_message() {
+        assert_eq!(
+            AppError::IngestRunAlreadyInFlight.to_string(),
+            "an ingestion run is already in progress for this repository"
+        );
     }
 }

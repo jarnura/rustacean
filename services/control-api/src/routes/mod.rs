@@ -19,7 +19,7 @@ use crate::routes::{
     github::webhook::github_webhook,
     health::{health_check, openapi_json, ready_check},
     me::{get_me, switch_tenant},
-    repos::connect_repo,
+    repos::{connect_repo, trigger_ingest},
     tenants::{invite_member, list_members, remove_member, transfer_ownership, update_member_role},
 };
 use crate::state::AppState;
@@ -48,5 +48,6 @@ pub fn build(state: AppState) -> Router {
         .route("/v1/health/github-app", get(github_app_health))
         .route("/v1/github/webhook", post(github_webhook))
         .route("/v1/repos", post(connect_repo))
+        .route("/v1/repos/{id}/ingest", post(trigger_ingest))
         .with_state(state)
 }

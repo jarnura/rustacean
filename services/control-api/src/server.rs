@@ -51,13 +51,20 @@ pub async fn run(config: Config) -> Result<()> {
 
     let gh = build_gh_app(&config)?;
 
+    let gh = gh.map(Arc::new);
+    if let Some(g) = &gh {
+        // Spawn the installation-token cache sweep now that we are inside
+        // the tokio runtime (REQ-GH-05).
+        g.start_token_sweep();
+    }
+
     let state = AppState {
         pool,
         email_sender: Arc::from(email_sender),
         hasher: Arc::new(hasher),
         login_rate_limiter: Arc::new(LoginRateLimiter::new()),
         config: Arc::new(config.clone()),
-        gh: gh.map(Arc::new),
+        gh,
     };
 
     let cors = CorsLayer::new()

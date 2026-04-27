@@ -26,7 +26,7 @@ pub struct InstallationInfo {
 #[derive(Debug, Deserialize)]
 pub struct InstallationAccount {
     pub login: String,
-    /// `User` or `Organization` — matches the DB constraint in github_installations.
+    /// `User` or `Organization` — matches the DB constraint in `github_installations`.
     #[serde(rename = "type")]
     pub kind: String,
     pub id: i64,

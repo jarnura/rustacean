@@ -1,3 +1,5 @@
+> **Title format**: `[REQ-XX-NN] type(scope): description` — CI will reject PRs without the bracket prefix.
+
 ## Summary
 
 <!-- What does this PR do and why? -->

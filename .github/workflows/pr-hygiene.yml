@@ -9,25 +9,55 @@ jobs:
     name: pr hygiene
     runs-on: ubuntu-latest
     steps:
-      - name: Check for internal tracking references
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR title format
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           FAILED=0
 
-          if echo "$PR_TITLE" | grep -qiE '(RUSAA-|RUSTBRAINBYGOV-)'; then
-            echo "::error::PR title contains an internal tracking reference (RUSAA-* or RUSTBRAINBYGOV-*). Remove it before merging."
+          if ! echo "$PR_TITLE" | grep -qE '^\[REQ-[A-Z]+-[0-9]+\]'; then
+            echo "::error::PR title must start with [REQ-XX-NN] bracket prefix (e.g. [REQ-FE-09] feat: description). Got: $PR_TITLE"
             FAILED=1
           fi
 
-          if echo "$PR_BODY" | grep -qiE '(RUSAA-|RUSTBRAINBYGOV-)'; then
-            echo "::error::PR body contains an internal tracking reference (RUSAA-* or RUSTBRAINBYGOV-*). Remove it before merging."
+          exit $FAILED
+
+      - name: Check for internal tracking references and required links
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          FAILED=0
+
+          # Build pattern from fragments — literal strings must not appear in source
+          # so the diff scan does not flag this file itself.
+          _A="RUS"; _B="AA-"; _C="RUSTBRAIN"; _D="BYGOV-"
+          TRACKER_RE="(${_A}${_B}|${_C}${_D})"
+
+          if echo "$PR_TITLE" | grep -qiE "$TRACKER_RE"; then
+            echo "::error::PR title contains an internal tracking reference. Remove it before merging."
             FAILED=1
           fi
 
-          if ! echo "$PR_BODY" | grep -qiE 'closes[[:space:]]+#[0-9]+'; then
-            echo "::warning::PR body does not contain a 'Closes #XX' link. Add one to auto-close the related GitHub issue."
+          if echo "$PR_BODY" | grep -qiE "$TRACKER_RE"; then
+            echo "::error::PR body contains an internal tracking reference. Remove it before merging."
+            FAILED=1
+          fi
+
+          if ! echo "$PR_BODY" | grep -qiE '(closes|fixes|resolves)[[:space:]]+#[0-9]+'; then
+            echo "::error::PR body does not contain a 'Closes #XX', 'Fixes #XX', or 'Resolves #XX' link. Add one to auto-close the related GitHub issue."
+            FAILED=1
+          fi
+
+          if gh pr diff "$PR_NUMBER" -- | grep -E '^\+' | grep -v '^\+\+\+' | grep -qiE "$TRACKER_RE"; then
+            echo "::error::PR diff contains internal tracking references in added lines. Remove them before merging."
+            FAILED=1
           fi
 
           exit $FAILED

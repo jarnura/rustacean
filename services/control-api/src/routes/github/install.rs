@@ -149,7 +149,12 @@ pub async fn github_callback(
          (id, tenant_id, github_installation_id, account_login, account_type, account_id) \
          VALUES ($1, $2, $3, $4, $5, $6) \
          ON CONFLICT (github_installation_id) \
-         DO UPDATE SET deleted_at = NULL, suspended_at = NULL",
+         DO UPDATE SET \
+           account_login = EXCLUDED.account_login, \
+           account_type  = EXCLUDED.account_type, \
+           account_id    = EXCLUDED.account_id, \
+           deleted_at    = NULL, \
+           suspended_at  = NULL",
     )
     .bind(Uuid::new_v4())
     .bind(tenant_id)

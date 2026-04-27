@@ -74,13 +74,13 @@ pub async fn list_available_repos(
     let page = params.page.max(1);
 
     let Some(gh) = state.gh.clone() else {
-        return Err(AppError::Internal(anyhow::anyhow!("GitHub App not configured")));
+        return Err(AppError::GitHubAppNotConfigured);
     };
 
     // Verify the installation belongs to the session's tenant and is active.
     let row: Option<(i64,)> = sqlx::query_as(
         "SELECT github_installation_id \
-         FROM github_installations \
+         FROM control.github_installations \
          WHERE id = $1 AND tenant_id = $2 \
            AND deleted_at IS NULL AND suspended_at IS NULL",
     )

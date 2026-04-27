@@ -11,16 +11,20 @@ type ListApiKeysResponse = components["schemas"]["ListApiKeysResponse"];
 type CreateApiKeyRequest = components["schemas"]["CreateApiKeyRequest"];
 type CreateApiKeyResponse = components["schemas"]["CreateApiKeyResponse"];
 
-export const apiKeysQueryKey = ["api-keys"] as const;
+// Tenant-scoped key prevents stale rows from a previous tenant flashing
+// in `/api-keys` while the active tenant's refetch is in flight.
+export const apiKeysQueryKey = (tenantId: string) =>
+  ["tenants", tenantId, "api-keys"] as const;
 
 export function useApiKeys(
+  tenantId: string,
   options?: Omit<
     UseQueryOptions<ListApiKeysResponse, ApiError>,
     "queryKey" | "queryFn"
   >,
 ) {
   return useQuery<ListApiKeysResponse, ApiError>({
-    queryKey: apiKeysQueryKey,
+    queryKey: apiKeysQueryKey(tenantId),
     queryFn: async () => {
       const { data, error, response } = await apiClient.GET("/v1/api-keys");
       if (error || !data) {
@@ -28,11 +32,12 @@ export function useApiKeys(
       }
       return data;
     },
+    enabled: tenantId.length > 0,
     ...options,
   });
 }
 
-export function useCreateApiKey() {
+export function useCreateApiKey(tenantId: string) {
   const qc = useQueryClient();
   return useMutation<CreateApiKeyResponse, ApiError, CreateApiKeyRequest>({
     mutationFn: async (body) => {
@@ -46,12 +51,12 @@ export function useCreateApiKey() {
       return data;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: apiKeysQueryKey });
+      void qc.invalidateQueries({ queryKey: apiKeysQueryKey(tenantId) });
     },
   });
 }
 
-export function useRevokeApiKey() {
+export function useRevokeApiKey(tenantId: string) {
   const qc = useQueryClient();
   return useMutation<void, ApiError, string>({
     mutationFn: async (id) => {
@@ -64,7 +69,7 @@ export function useRevokeApiKey() {
       }
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: apiKeysQueryKey });
+      void qc.invalidateQueries({ queryKey: apiKeysQueryKey(tenantId) });
     },
   });
 }

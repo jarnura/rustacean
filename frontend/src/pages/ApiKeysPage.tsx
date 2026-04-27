@@ -67,6 +67,7 @@ export function ApiKeysPage(): JSX.Element {
 
   return (
     <ApiKeysPageInner
+      tenantId={me.data.current_tenant.id}
       tenantName={me.data.current_tenant.name}
       callerRole={me.data.current_tenant.role}
     />
@@ -74,19 +75,21 @@ export function ApiKeysPage(): JSX.Element {
 }
 
 interface ApiKeysPageInnerProps {
+  readonly tenantId: string;
   readonly tenantName: string;
   readonly callerRole: string;
 }
 
 function ApiKeysPageInner({
+  tenantId,
   tenantName,
   callerRole,
 }: ApiKeysPageInnerProps): JSX.Element {
   const canManage = callerRole === "owner" || callerRole === "admin";
 
-  const keys = useApiKeys();
-  const createKey = useCreateApiKey();
-  const revokeKey = useRevokeApiKey();
+  const keys = useApiKeys(tenantId);
+  const createKey = useCreateApiKey(tenantId);
+  const revokeKey = useRevokeApiKey(tenantId);
 
   const [plaintext, setPlaintext] = useState<PlaintextKey | null>(null);
 

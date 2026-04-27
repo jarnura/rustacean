@@ -189,9 +189,10 @@ pub async fn trigger_ingest(
 
     let in_flight: Option<(Uuid,)> = sqlx::query_as(
         "SELECT id FROM control.ingestion_runs \
-         WHERE repo_id = $1 AND status IN ('queued', 'running') LIMIT 1",
+         WHERE repo_id = $1 AND tenant_id = $2 AND status IN ('queued', 'running') LIMIT 1",
     )
     .bind(repo_id)
+    .bind(session.tenant_id)
     .fetch_optional(&state.pool)
     .await?;
     if in_flight.is_some() {

@@ -424,6 +424,56 @@
         }
       }
     },
+    "/v1/repos": {
+      "post": {
+        "tags": [
+          "repos"
+        ],
+        "summary": "Connect a GitHub repository to the calling user's active tenant.",
+        "description": "Verifies the installation belongs to the session tenant, confirms the repo\nis accessible via GitHub's API, then inserts a `repos` row with\n`status = 'connected'`.",
+        "operationId": "connect_repo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectRepoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Repository connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectRepoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated or session expired"
+          },
+          "403": {
+            "description": "Email not verified"
+          },
+          "404": {
+            "description": "Installation not found or not owned by this tenant"
+          },
+          "409": {
+            "description": "Repository already connected (repo_already_connected)"
+          },
+          "422": {
+            "description": "Repository not accessible via installation (repo_not_accessible)"
+          },
+          "503": {
+            "description": "GitHub App not configured on this instance"
+          }
+        }
+      }
+    },
     "/v1/tenants/{id}/members": {
       "get": {
         "tags": [
@@ -721,6 +771,52 @@
             "items": {
               "$ref": "#/components/schemas/Scope"
             }
+          }
+        }
+      },
+      "ConnectRepoRequest": {
+        "type": "object",
+        "required": [
+          "installation_id",
+          "github_repo_id"
+        ],
+        "properties": {
+          "default_branch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Default branch override. If omitted, the value is fetched from GitHub."
+          },
+          "github_repo_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "GitHub numeric repository ID (from the list-repos response)."
+          },
+          "installation_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "GitHub numeric installation ID (from the App install callback)."
+          }
+        }
+      },
+      "ConnectRepoResponse": {
+        "type": "object",
+        "required": [
+          "repo_id",
+          "full_name",
+          "default_branch"
+        ],
+        "properties": {
+          "default_branch": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "repo_id": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },
@@ -1224,6 +1320,10 @@
     {
       "name": "github",
       "description": "GitHub App integration"
+    },
+    {
+      "name": "repos",
+      "description": "Repository management"
     }
   ]
 }

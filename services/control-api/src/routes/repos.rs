@@ -94,8 +94,8 @@ pub async fn connect_repo(
     let repo_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO control.repos \
-         (id, tenant_id, installation_id, github_repo_id, full_name, default_branch, connected_by) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+         (id, tenant_id, installation_id, github_repo_id, full_name, default_branch, connected_by, status) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'connected')",
     )
     .bind(repo_id)
     .bind(session.tenant_id)

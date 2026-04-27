@@ -15,6 +15,8 @@ use crate::routes::{
     auth_logout::logout,
     auth_verify::verify_email,
     github::health::github_app_health,
+    github::install::{github_callback, github_install_url},
+    github::repos::list_available_repos,
     github::webhook::github_webhook,
     health::{health_check, openapi_json, ready_check},
     me::{get_me, switch_tenant},
@@ -44,6 +46,12 @@ pub fn build(state: AppState) -> Router {
         .route("/v1/tenants/{id}/members/{uid}", delete(remove_member))
         .route("/v1/tenants/{id}/transfer-ownership", post(transfer_ownership))
         .route("/v1/health/github-app", get(github_app_health))
+        .route("/v1/github/install-url", get(github_install_url))
+        .route("/v1/github/callback", get(github_callback))
+        .route(
+            "/v1/github/installations/{id}/available-repos",
+            get(list_available_repos),
+        )
         .route("/v1/github/webhook", post(github_webhook))
         .with_state(state)
 }

@@ -2,13 +2,15 @@ mod app_jwt;
 mod client;
 mod error;
 mod installation_token;
+mod repos;
 mod secret;
 mod state_token;
 mod token_cache;
 mod webhook;
 
-pub use client::{AppIdentity, AppOwner};
+pub use client::{AppIdentity, AppOwner, InstallationInfo};
 pub use error::GhError;
+pub use repos::{RepoItem, RepoPage};
 pub use secret::Secret;
 pub use state_token::hash_token;
 pub use token_cache::{CachedToken, MintFuture, TokenCache, TokenMinter, SAFETY_MARGIN};
@@ -127,6 +129,43 @@ impl GhApp {
         installation_id: i64,
     ) -> Result<Secret<String>, GhError> {
         self.token_cache.get_or_mint(installation_id).await
+    }
+
+    /// Lists repositories accessible to the given installation (REQ-GH-03).
+    ///
+    /// Obtains an installation token via the cache, then calls
+    /// `GET /installation/repositories`. Archived repos are included in the
+    /// raw response; callers filter them as needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhError`] if token minting fails or the GitHub API call
+    /// returns a non-2xx response.
+    pub async fn list_installation_repos(
+        &self,
+        installation_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<repos::RepoPage, GhError> {
+        let token = self.token_cache.get_or_mint(installation_id).await?;
+        repos::list_installation_repos(token.expose(), &self.http, page, per_page).await
+    }
+
+    /// Fetches metadata for a specific GitHub App installation using the App JWT.
+    ///
+    /// Called by `GET /v1/github/callback` (REQ-GH-02) to look up
+    /// `account_login`, `account_type`, and `account_id` before writing the
+    /// `github_installations` row.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhError`] if the App JWT cannot be minted or the GitHub API
+    /// call returns a non-2xx response.
+    pub async fn fetch_installation(
+        &self,
+        installation_id: i64,
+    ) -> Result<client::InstallationInfo, GhError> {
+        client::fetch_installation(self, &self.http, installation_id).await
     }
 
     /// Spawns the periodic eviction sweep for the installation-token cache.

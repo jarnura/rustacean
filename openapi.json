@@ -585,6 +585,32 @@
       }
     },
     "/v1/repos": {
+      "get": {
+        "tags": [
+          "repos"
+        ],
+        "summary": "List all connected repositories for the current session's tenant.",
+        "description": "Soft-deleted repos (`archived_at IS NOT NULL`) are excluded.\nResults are ordered by `connected_at DESC` (most recently connected first).\nRequires a verified session.",
+        "operationId": "list_repos",
+        "responses": {
+          "200": {
+            "description": "List of connected repos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListReposResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated or session expired"
+          },
+          "403": {
+            "description": "Email not verified"
+          }
+        }
+      },
       "post": {
         "tags": [
           "repos"
@@ -1243,32 +1269,14 @@
       "ListReposResponse": {
         "type": "object",
         "required": [
-          "total_count",
-          "page",
-          "per_page",
-          "repositories"
+          "repos"
         ],
         "properties": {
-          "page": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "per_page": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "repositories": {
+          "repos": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RepoItemResponse"
+              "$ref": "#/components/schemas/RepoItem"
             }
-          },
-          "total_count": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
           }
         }
       },
@@ -1367,6 +1375,45 @@
           "status"
         ],
         "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "RepoItem": {
+        "type": "object",
+        "required": [
+          "repo_id",
+          "full_name",
+          "default_branch",
+          "status",
+          "connected_by",
+          "connected_at",
+          "installation_id"
+        ],
+        "properties": {
+          "connected_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "connected_by": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "default_branch": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "installation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repo_id": {
+            "type": "string",
+            "format": "uuid"
+          },
           "status": {
             "type": "string"
           }
@@ -1655,7 +1702,7 @@
     },
     {
       "name": "repos",
-      "description": "Repository management"
+      "description": "Connected repository management"
     }
   ]
 }

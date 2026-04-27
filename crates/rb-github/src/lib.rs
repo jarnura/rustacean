@@ -2,13 +2,15 @@ mod app_jwt;
 mod client;
 mod error;
 mod installation_token;
+mod repos;
 mod secret;
 mod state_token;
 mod token_cache;
 mod webhook;
 
-pub use client::{AppIdentity, AppOwner, RepoInfo};
+pub use client::{AppIdentity, AppOwner, InstallationInfo, RepoInfo};
 pub use error::GhError;
+pub use repos::{RepoItem, RepoPage};
 pub use secret::Secret;
 pub use state_token::hash_token;
 pub use token_cache::{CachedToken, MintFuture, TokenCache, TokenMinter, SAFETY_MARGIN};
@@ -60,19 +62,16 @@ impl GhApp {
             .max_capacity(1)
             .time_to_live(Duration::from_secs(60))
             .build();
-
         let http = Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
             .expect("reqwest client init is infallible with valid config");
-
         let minter: Arc<dyn TokenMinter> = Arc::new(GitHubTokenMinter::new(
             app_id,
             encoding_key.clone(),
             http.clone(),
         ));
         let token_cache = TokenCache::new(minter);
-
         Self {
             app_id,
             encoding_key,
@@ -106,13 +105,10 @@ impl GhApp {
         }
         let identity = client::fetch_app_identity(self, &self.http).await?;
         self.identity_cache.insert((), identity).await;
-        self.identity_cache
-            .get(&())
-            .await
-            .ok_or_else(|| GhError::ApiError {
-                status: 500,
-                body: "identity cache miss immediately after insert".to_owned(),
-            })
+        self.identity_cache.get(&()).await.ok_or_else(|| GhError::ApiError {
+            status: 500,
+            body: "identity cache miss immediately after insert".to_owned(),
+        })
     }
 
     /// Returns a usable installation access token, minting if absent or
@@ -122,31 +118,47 @@ impl GhApp {
     ///
     /// Returns [`GhError`] if the App JWT cannot be minted or the GitHub
     /// `POST /app/installations/{id}/access_tokens` call fails.
-    pub async fn installation_token(
-        &self,
-        installation_id: i64,
-    ) -> Result<Secret<String>, GhError> {
+    pub async fn installation_token(&self, installation_id: i64) -> Result<Secret<String>, GhError> {
         self.token_cache.get_or_mint(installation_id).await
     }
 
     /// Fetches a repository by GitHub numeric ID, confirming it is accessible
     /// via the given installation.
     ///
-    /// Mints (or reuses a cached) installation access token, then calls
-    /// `GET /repositories/{repo_id}` on GitHub's API.
-    ///
     /// # Errors
     ///
     /// Returns [`GhError::ApiError { status: 404, .. }`] when the repo does not
     /// exist or is not accessible through this installation. Other GitHub API
     /// errors and token-minting failures propagate as [`GhError`].
-    pub async fn fetch_repo(
-        &self,
-        installation_id: i64,
-        repo_id: i64,
-    ) -> Result<RepoInfo, GhError> {
+    pub async fn fetch_repo(&self, installation_id: i64, repo_id: i64) -> Result<RepoInfo, GhError> {
         let token = self.installation_token(installation_id).await?;
         client::fetch_repo_by_id(&self.http, token.expose(), repo_id).await
+    }
+
+    /// Returns the paginated list of repositories accessible to an installation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhError`] if the installation token cannot be minted or the
+    /// GitHub API call fails.
+    pub async fn list_installation_repos(
+        &self,
+        installation_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<repos::RepoPage, GhError> {
+        let token = self.token_cache.get_or_mint(installation_id).await?;
+        repos::list_installation_repos(token.expose(), &self.http, page, per_page).await
+    }
+
+    /// Fetches metadata for a GitHub App installation by installation ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GhError`] if the App JWT cannot be minted or the GitHub API
+    /// call fails.
+    pub async fn fetch_installation(&self, installation_id: i64) -> Result<client::InstallationInfo, GhError> {
+        client::fetch_installation(self, &self.http, installation_id).await
     }
 
     /// Spawns the periodic eviction sweep for the installation-token cache.
@@ -167,15 +179,12 @@ impl std::fmt::Debug for GhApp {
     }
 }
 
-// AppIdentity must be Clone for the moka cache to store it.
 impl Clone for AppIdentity {
     fn clone(&self) -> Self {
         Self {
             id: self.id,
             slug: self.slug.clone(),
-            owner: AppOwner {
-                login: self.owner.login.clone(),
-            },
+            owner: AppOwner { login: self.owner.login.clone() },
         }
     }
 }

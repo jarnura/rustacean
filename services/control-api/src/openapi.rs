@@ -13,9 +13,9 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
         health::health_check,
         health::ready_check,
         github::health::github_app_health,
-        // github::webhook::github_webhook is intentionally NOT exposed via OpenAPI:
-        // it is consumed only by GitHub's webhook delivery service, authenticated
-        // by HMAC, and has no schema representation for HeaderMap/Bytes extractors.
+        github::install::github_install_url,
+        github::install::github_callback,
+        github::repos::list_available_repos,
         auth::signup,
         auth::login,
         auth_logout::logout,
@@ -38,6 +38,10 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
         schemas(
             health::ProbeResponse,
             github::health::GithubAppHealthResponse,
+            github::install::InstallUrlResponse,
+            github::install::CallbackResponse,
+            github::repos::RepoItemResponse,
+            github::repos::ListReposResponse,
             auth::SignupRequest,
             auth::SignupResponse,
             auth::LoginRequest,

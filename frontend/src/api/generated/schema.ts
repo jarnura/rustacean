@@ -221,6 +221,54 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/github/callback": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get: operations["github_callback"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/github/install-url": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get: operations["github_install_url"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/v1/github/installations/{id}/available-repos": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get: operations["list_available_repos"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/health/github-app": {
         readonly parameters: {
             readonly query?: never;
@@ -418,6 +466,12 @@ export interface components {
             readonly name: string;
             readonly scopes: readonly components["schemas"]["Scope"][];
         };
+        readonly CallbackResponse: {
+            readonly account_login: string;
+            readonly account_type: string;
+            /** Format: int64 */
+            readonly installation_id: number;
+        };
         readonly ConnectRepoRequest: {
             /** @description Default branch override. If omitted, the value is fetched from GitHub. */
             readonly default_branch?: string | null;
@@ -471,6 +525,12 @@ export interface components {
             readonly owner: string;
             readonly slug: string;
         };
+        readonly InstallUrlResponse: {
+            /** @description The raw opaque state token embedded in the URL. */
+            readonly state_token: string;
+            /** @description Full GitHub App install URL to open in the browser. */
+            readonly url: string;
+        };
         readonly InviteMemberRequest: {
             /** @description Email address of the user to invite or add. */
             readonly email: string;
@@ -491,6 +551,15 @@ export interface components {
         };
         readonly ListMembersResponse: {
             readonly members: readonly components["schemas"]["MemberItem"][];
+        };
+        readonly ListReposResponse: {
+            /** Format: int32 */
+            readonly page: number;
+            /** Format: int32 */
+            readonly per_page: number;
+            readonly repositories: readonly components["schemas"]["RepoItemResponse"][];
+            /** Format: int64 */
+            readonly total_count: number;
         };
         readonly LoginRequest: {
             /** @description RFC 5322 email address. */
@@ -525,6 +594,16 @@ export interface components {
         };
         readonly ProbeResponse: {
             readonly status: string;
+        };
+        readonly RepoItemResponse: {
+            readonly archived: boolean;
+            readonly default_branch: string;
+            readonly full_name: string;
+            readonly html_url: string;
+            /** Format: int64 */
+            readonly id: number;
+            readonly name: string;
+            readonly private: boolean;
         };
         readonly ResetPasswordRequest: {
             /** @description New password; minimum 12 characters. */
@@ -936,6 +1015,146 @@ export interface operations {
             };
             /** @description Token expired, already used, or not found (invalid_token) */
             readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly github_callback: {
+        readonly parameters: {
+            readonly query: {
+                /** @description GitHub numeric installation ID */
+                readonly installation_id: number;
+                /** @description Opaque state token from install-url */
+                readonly state: string;
+                /** @description install or update */
+                readonly setup_action?: string;
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Installation created or updated */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["CallbackResponse"];
+                };
+            };
+            /** @description Invalid or expired state token */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description GitHub App not configured on this instance */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly github_install_url: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Install URL generated */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["InstallUrlResponse"];
+                };
+            };
+            /** @description Not authenticated or session expired */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email not verified */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description GitHub App not configured on this instance */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly list_available_repos: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Page number (default 1) */
+                readonly page?: number;
+                /** @description Results per page 1-100 (default 30) */
+                readonly per_page?: number;
+                /** @description Include archived repos (default false) */
+                readonly include_archived?: boolean;
+            };
+            readonly header?: never;
+            readonly path: {
+                /** @description Internal installation UUID (from github_installations) */
+                readonly id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Paginated list of repositories */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ListReposResponse"];
+                };
+            };
+            /** @description Not authenticated or session expired */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email not verified */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Installation not found or not owned by this tenant */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description GitHub App not configured on this instance */
+            readonly 503: {
                 headers: {
                     readonly [name: string]: unknown;
                 };

@@ -331,6 +331,166 @@
         }
       }
     },
+    "/v1/github/callback": {
+      "get": {
+        "tags": [
+          "github"
+        ],
+        "operationId": "github_callback",
+        "parameters": [
+          {
+            "name": "installation_id",
+            "in": "query",
+            "description": "GitHub numeric installation ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "description": "Opaque state token from install-url",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "setup_action",
+            "in": "query",
+            "description": "install or update",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Installation created or updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallbackResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or expired state token"
+          },
+          "503": {
+            "description": "GitHub App not configured on this instance"
+          }
+        }
+      }
+    },
+    "/v1/github/install-url": {
+      "get": {
+        "tags": [
+          "github"
+        ],
+        "operationId": "github_install_url",
+        "responses": {
+          "200": {
+            "description": "Install URL generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallUrlResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated or session expired"
+          },
+          "403": {
+            "description": "Email not verified"
+          },
+          "503": {
+            "description": "GitHub App not configured on this instance"
+          }
+        }
+      }
+    },
+    "/v1/github/installations/{id}/available-repos": {
+      "get": {
+        "tags": [
+          "github"
+        ],
+        "operationId": "list_available_repos",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Internal installation UUID (from github_installations)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (default 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Results per page 1-100 (default 30)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "description": "Include archived repos (default false)",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of repositories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListReposResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated or session expired"
+          },
+          "403": {
+            "description": "Email not verified"
+          },
+          "404": {
+            "description": "Installation not found or not owned by this tenant"
+          },
+          "503": {
+            "description": "GitHub App not configured on this instance"
+          }
+        }
+      }
+    },
     "/v1/health/github-app": {
       "get": {
         "tags": [
@@ -774,6 +934,26 @@
           }
         }
       },
+      "CallbackResponse": {
+        "type": "object",
+        "required": [
+          "installation_id",
+          "account_login",
+          "account_type"
+        ],
+        "properties": {
+          "account_login": {
+            "type": "string"
+          },
+          "account_type": {
+            "type": "string"
+          },
+          "installation_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "ConnectRepoRequest": {
         "type": "object",
         "required": [
@@ -929,6 +1109,23 @@
           }
         }
       },
+      "InstallUrlResponse": {
+        "type": "object",
+        "required": [
+          "url",
+          "state_token"
+        ],
+        "properties": {
+          "state_token": {
+            "type": "string",
+            "description": "The raw opaque state token embedded in the URL."
+          },
+          "url": {
+            "type": "string",
+            "description": "Full GitHub App install URL to open in the browser."
+          }
+        }
+      },
       "InviteMemberRequest": {
         "type": "object",
         "required": [
@@ -994,6 +1191,38 @@
             "items": {
               "$ref": "#/components/schemas/MemberItem"
             }
+          }
+        }
+      },
+      "ListReposResponse": {
+        "type": "object",
+        "required": [
+          "total_count",
+          "page",
+          "per_page",
+          "repositories"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RepoItemResponse"
+            }
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },
@@ -1094,6 +1323,42 @@
         "properties": {
           "status": {
             "type": "string"
+          }
+        }
+      },
+      "RepoItemResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "full_name",
+          "private",
+          "archived",
+          "default_branch",
+          "html_url"
+        ],
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "default_branch": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "html_url": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "private": {
+            "type": "boolean"
           }
         }
       },

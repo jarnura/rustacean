@@ -35,13 +35,18 @@ jobs:
         run: |
           FAILED=0
 
-          if echo "$PR_TITLE" | grep -qiE '(RUSAA-|RUSTBRAINBYGOV-)'; then
-            echo "::error::PR title contains an internal tracking reference (RUSAA-* or RUSTBRAINBYGOV-*). Remove it before merging."
+          # Build pattern from fragments — literal strings must not appear in source
+          # so the diff scan does not flag this file itself.
+          _A="RUS"; _B="AA-"; _C="RUSTBRAIN"; _D="BYGOV-"
+          TRACKER_RE="(${_A}${_B}|${_C}${_D})"
+
+          if echo "$PR_TITLE" | grep -qiE "$TRACKER_RE"; then
+            echo "::error::PR title contains an internal tracking reference. Remove it before merging."
             FAILED=1
           fi
 
-          if echo "$PR_BODY" | grep -qiE '(RUSAA-|RUSTBRAINBYGOV-)'; then
-            echo "::error::PR body contains an internal tracking reference (RUSAA-* or RUSTBRAINBYGOV-*). Remove it before merging."
+          if echo "$PR_BODY" | grep -qiE "$TRACKER_RE"; then
+            echo "::error::PR body contains an internal tracking reference. Remove it before merging."
             FAILED=1
           fi
 
@@ -50,8 +55,8 @@ jobs:
             FAILED=1
           fi
 
-          if gh pr diff "$PR_NUMBER" -- | grep -E '^\+' | grep -v '^\+\+\+' | grep -qiE '(RUSAA-|RUSTBRAINBYGOV-)'; then
-            echo "::error::PR diff contains internal tracking references (RUSAA-* or RUSTBRAINBYGOV-*) in added lines. Remove them before merging."
+          if gh pr diff "$PR_NUMBER" -- | grep -E '^\+' | grep -v '^\+\+\+' | grep -qiE "$TRACKER_RE"; then
+            echo "::error::PR diff contains internal tracking references in added lines. Remove them before merging."
             FAILED=1
           fi
 

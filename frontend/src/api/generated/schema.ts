@@ -310,6 +310,28 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/repos/{id}/ingest": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Trigger an asynchronous ingestion run for a connected repository.
+         * @description Returns 202 immediately; ingestion is processed asynchronously by the worker.
+         *     404 if the repository does not exist or belongs to another tenant.
+         *     409 if an ingestion run is already queued or running for this repo.
+         */
+        readonly post: operations["trigger_ingest"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/tenants/{id}/members": {
         readonly parameters: {
             readonly query?: never;
@@ -575,6 +597,13 @@ export interface components {
              * @description User ID of the existing member to promote to owner.
              */
             readonly user_id: string;
+        };
+        readonly TriggerIngestResponse: {
+            /** Format: uuid */
+            readonly repo_id: string;
+            /** Format: uuid */
+            readonly run_id: string;
+            readonly status: string;
         };
         readonly UpdateRoleRequest: {
             /** @description Target role: `member` or `admin`. Cannot set `owner` via this endpoint. */
@@ -1108,6 +1137,57 @@ export interface operations {
             };
             /** @description GitHub App not configured on this instance */
             readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly trigger_ingest: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description Repository UUID (from POST /v1/repos) */
+                readonly id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Ingestion run queued */
+            readonly 202: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["TriggerIngestResponse"];
+                };
+            };
+            /** @description Not authenticated or session expired */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email not verified */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Repository not found or belongs to another tenant */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ingestion run already in-flight (ingest_run_already_in_flight) */
+            readonly 409: {
                 headers: {
                     readonly [name: string]: unknown;
                 };

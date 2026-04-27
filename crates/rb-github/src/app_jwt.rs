@@ -56,8 +56,7 @@ mod tests {
     #[test]
     fn mint_produces_three_part_jwt() {
         let pem = format!(
-            "-----BEGIN RSA PRIVATE KEY-----\n{}\n-----END RSA PRIVATE KEY-----\n",
-            TEST_RSA_KEY_BODY
+            "-----BEGIN RSA PRIVATE KEY-----\n{TEST_RSA_KEY_BODY}\n-----END RSA PRIVATE KEY-----\n"
         );
         let key = EncodingKey::from_rsa_pem(pem.as_bytes()).expect("test key should parse");
         let jwt = mint_app_jwt(12345, &key).expect("mint should succeed");

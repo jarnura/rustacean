@@ -24,31 +24,19 @@ export function AppShell({ children }: AppShellProps): JSX.Element {
           >
             <Link
               to={routes.repos}
-              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              activeProps={{
-                className:
-                  "rounded-md px-3 py-1.5 text-sm font-medium text-foreground bg-accent",
-              }}
+              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-accent aria-[current=page]:text-foreground aria-[current=page]:font-medium"
             >
               Repos
             </Link>
             <Link
               to={routes.members}
-              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              activeProps={{
-                className:
-                  "rounded-md px-3 py-1.5 text-sm font-medium text-foreground bg-accent",
-              }}
+              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-accent aria-[current=page]:text-foreground aria-[current=page]:font-medium"
             >
               Members
             </Link>
             <Link
               to={routes.apiKeys}
-              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              activeProps={{
-                className:
-                  "rounded-md px-3 py-1.5 text-sm font-medium text-foreground bg-accent",
-              }}
+              className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-[current=page]:bg-accent aria-[current=page]:text-foreground aria-[current=page]:font-medium"
             >
               API keys
             </Link>

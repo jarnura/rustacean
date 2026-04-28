@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023", "DOM"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -12,10 +12,5 @@
     "moduleDetection": "force",
     "types": ["node"]
   },
-  "include": [
-    "vite.config.ts",
-    "eslint.config.js",
-    "scripts/**/*.mjs",
-    "playwright.config.ts"
-  ]
+  "include": ["e2e/**/*.ts"]
 }

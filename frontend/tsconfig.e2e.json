@@ -1,16 +1,15 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023"],
+    "lib": ["ES2022", "DOM"],
     "module": "ESNext",
-    "skipLibCheck": true,
     "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true,
     "strict": true,
     "noEmit": true,
+    "skipLibCheck": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "eslint.config.js", "scripts/**/*.mjs"]
+  "include": ["e2e/**/*.ts"]
 }

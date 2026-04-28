@@ -11,7 +11,9 @@
     "typecheck": "tsc -b --noEmit",
     "gen:api": "openapi-typescript ../openapi.json -o src/api/generated/schema.ts --immutable",
     "gen:api:check": "node ./scripts/check-api-types.mjs",
-    "lint": "eslint src --max-warnings=0"
+    "lint": "eslint src --max-warnings=0",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -30,7 +32,9 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.2",
     "@eslint/js": "^9.16.0",
+    "@playwright/test": "^1.59.1",
     "@tanstack/router-devtools": "^1.166.13",
     "@tanstack/router-plugin": "^1.167.27",
     "@types/node": "^22.19.17",

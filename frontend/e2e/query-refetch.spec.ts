@@ -124,9 +124,6 @@ test.describe("TanStack Query invalidation on mutation success", () => {
     // Wait for the available-repo entry and click it to set github_repo_id.
     await page.getByRole("button", { name: /acme\/api/ }).click();
 
-    // Fill in a valid numeric installation ID so Zod accepts the form.
-    await page.locator("#numeric-install-id").fill("12345678");
-
     // Listen for the invalidation refetch BEFORE submitting so we don't miss it.
     const refetchPromise = page.waitForResponse(
       (r) => {

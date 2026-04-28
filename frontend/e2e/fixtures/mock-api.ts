@@ -60,7 +60,7 @@ export const MEMBERS_RESPONSE = {
   ],
 };
 
-export const API_KEYS_RESPONSE = { api_keys: [] };
+export const API_KEYS_RESPONSE = { keys: [] };
 
 export async function mockAuthenticatedSession(page: Page): Promise<void> {
   await page.route("**/v1/me", (route) =>

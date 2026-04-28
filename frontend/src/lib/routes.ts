@@ -6,6 +6,7 @@ export const routes = {
   forgotPassword: "/forgot-password",
   resetPassword: "/reset-password",
   repos: "/repos",
+  repoDetail: "/repos/$repoId",
   members: "/members",
   apiKeys: "/api-keys",
 } as const;

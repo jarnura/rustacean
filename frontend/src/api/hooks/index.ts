@@ -21,3 +21,14 @@ export {
   useTransferOwnership,
 } from "./useTenantMembers";
 export { useHealth, healthQueryKey } from "./useHealth";
+export {
+  useRepos,
+  reposQueryKey,
+  useConnectRepo,
+  useTriggerIngest,
+  useAvailableRepos,
+  type RepoItem,
+  type AvailableRepo,
+  type AvailableReposResponse,
+} from "./useRepos";
+export { useGithubInstallUrl } from "./useGithubInstall";

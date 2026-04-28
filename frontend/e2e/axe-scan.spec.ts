@@ -138,3 +138,4 @@ test.describe("Axe accessibility scan — main routes", () => {
     ).toHaveLength(0);
   });
 });
+

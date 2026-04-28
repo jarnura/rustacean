@@ -1,0 +1,86 @@
+name: Frontend Axe Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_branch:
+        description: "PR branch being scanned"
+        required: true
+        type: string
+      sha:
+        description: "Commit SHA to check out and scan"
+        required: true
+        type: string
+      route:
+        description: "Route to scan (e.g. /login). Leave empty to scan all routes."
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  axe-scan:
+    name: axe accessibility scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright and axe-core
+        run: npm install --no-save @playwright/test@^1.52.0 @axe-core/playwright@^4.10.0
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-axe-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run axe scan + focus-trap probe
+        env:
+          CI: "true"
+          SCAN_ROUTE: ${{ inputs.route }}
+          SCAN_SHA: ${{ inputs.sha }}
+          SCAN_BRANCH: ${{ inputs.pr_branch }}
+        run: >-
+          npx playwright test e2e/axe-dispatch.spec.ts
+          --config playwright.axe.config.ts
+
+      - name: Upload accessibility artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: axe-report-${{ inputs.sha }}
+          path: |
+            frontend/axe-results/
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 30

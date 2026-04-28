@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { useMe, useRepos, useTriggerIngest } from "@/api";
 import { formatApiError } from "@/lib/errors/api";
 import { routes } from "@/lib/routes";
+import { StatusBadge } from "@/components/repos/StatusBadge";
+import { PageContainer } from "@/components/repos/PageContainer";
 
 export function RepoDetailPage(): JSX.Element {
   const { repoId } = useParams({ from: "/repos/$repoId" });
@@ -48,7 +50,7 @@ function RepoDetailInner({
   tenantId,
 }: RepoDetailInnerProps): JSX.Element {
   const repos = useRepos(tenantId);
-  const triggerIngest = useTriggerIngest();
+  const triggerIngest = useTriggerIngest(tenantId);
   const [ingestRunId, setIngestRunId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -170,28 +172,4 @@ function RepoDetailInner({
       )}
     </PageContainer>
   );
-}
-
-function StatusBadge({ status }: { readonly status: string }): JSX.Element {
-  const colors =
-    status === "connected"
-      ? "border-green-500/30 bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
-      : status === "ingesting"
-        ? "border-blue-500/30 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
-        : "border-border bg-muted text-muted-foreground";
-  return (
-    <span
-      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${colors}`}
-    >
-      {status}
-    </span>
-  );
-}
-
-function PageContainer({
-  children,
-}: {
-  readonly children: React.ReactNode;
-}): JSX.Element {
-  return <div className="container max-w-3xl py-8">{children}</div>;
 }

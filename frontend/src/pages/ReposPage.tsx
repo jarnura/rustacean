@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   useMe,
   useRepos,
@@ -12,6 +14,12 @@ import {
 } from "@/api";
 import { formatApiError } from "@/lib/errors/api";
 import { routes } from "@/lib/routes";
+import {
+  connectRepoFormSchema,
+  type ConnectRepoFormValues,
+} from "@/lib/validation/repos";
+import { StatusBadge } from "@/components/repos/StatusBadge";
+import { PageContainer } from "@/components/repos/PageContainer";
 
 // ---------------------------------------------------------------------------
 // ReposPage — entry point
@@ -152,20 +160,6 @@ function RepoRow({ repo }: { readonly repo: RepoItem }): JSX.Element {
   );
 }
 
-function StatusBadge({ status }: { readonly status: string }): JSX.Element {
-  const colors =
-    status === "connected"
-      ? "border-green-500/30 bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
-      : status === "ingesting"
-        ? "border-blue-500/30 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
-        : "border-border bg-muted text-muted-foreground";
-  return (
-    <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${colors}`}>
-      {status}
-    </span>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Empty state
 // ---------------------------------------------------------------------------
@@ -189,8 +183,16 @@ function EmptyState({ onConnect }: { readonly onConnect: () => void }): JSX.Elem
 }
 
 // ---------------------------------------------------------------------------
-// Connect repo dialog
+// Connect repo dialog — focus trap + Escape
 // ---------------------------------------------------------------------------
+
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function getFocusableElements(container: HTMLElement | null): HTMLElement[] {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+}
 
 type ConnectStep = "install" | "pick";
 
@@ -213,13 +215,53 @@ function ConnectRepoDialog({
   const [resolvedInstallId, setResolvedInstallId] = useState<string>(
     installationId ?? "",
   );
-  // Numeric installation_id (GitHub's i64) required by POST /v1/repos.
-  // Not available from connected-repos list (which only stores internal UUID).
-  // User must supply it; they can find it in the GitHub App callback response.
-  const [numericInstallId, setNumericInstallId] = useState("");
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // Save trigger element; focus first focusable on mount; restore on unmount
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    const focusables = getFocusableElements(dialogRef.current);
+    focusables[0]?.focus();
+    return () => {
+      previousFocusRef.current?.focus();
+    };
+  }, []);
+
+  // Escape key closes dialog; Tab/Shift+Tab cycles within dialog
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key === "Tab") {
+        const focusables = getFocusableElements(dialogRef.current);
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (!first || !last) return;
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="connect-repo-title"
@@ -259,8 +301,6 @@ function ConnectRepoDialog({
           <PickRepoStep
             tenantId={tenantId}
             installationUuid={resolvedInstallId}
-            numericInstallId={numericInstallId}
-            onNumericInstallIdChange={setNumericInstallId}
             onSuccess={onSuccess}
           />
         )}
@@ -319,45 +359,50 @@ function InstallStep({
 }
 
 // ---------------------------------------------------------------------------
-// Step 2 — Pick repo from available list
+// Step 2 — Pick repo from available list (with field-level validation)
 // ---------------------------------------------------------------------------
 
 interface PickRepoStepProps {
   readonly tenantId: string;
   readonly installationUuid: string;
-  readonly numericInstallId: string;
-  readonly onNumericInstallIdChange: (v: string) => void;
   readonly onSuccess: () => void;
 }
 
 function PickRepoStep({
   tenantId,
   installationUuid,
-  numericInstallId,
-  onNumericInstallIdChange,
   onSuccess,
 }: PickRepoStepProps): JSX.Element {
   const available = useAvailableRepos(installationUuid, 1, {
     enabled: installationUuid.length > 0,
   });
   const connect = useConnectRepo(tenantId);
-  const [selected, setSelected] = useState<AvailableRepo | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const numericId = Number(numericInstallId);
-  const canConnect =
-    selected !== null && Number.isFinite(numericId) && numericId > 0;
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<ConnectRepoFormValues>({
+    resolver: zodResolver(connectRepoFormSchema),
+  });
 
-  const handleConnect = async () => {
-    if (!selected || !canConnect) {
-      return;
-    }
+  const selectedRepoId = watch("github_repo_id");
+
+  const handleSelectRepo = (repo: AvailableRepo) => {
+    setValue("github_repo_id", repo.id, { shouldValidate: true });
+    setValue("default_branch", repo.default_branch || undefined);
+  };
+
+  const onSubmit = handleSubmit(async (values) => {
     setBusy(true);
     try {
       const result = await connect.mutateAsync({
-        installation_id: numericId,
-        github_repo_id: selected.id,
-        default_branch: selected.default_branch || null,
+        installation_id: values.installation_id,
+        github_repo_id: values.github_repo_id,
+        default_branch: values.default_branch ?? null,
       });
       toast.success(`Connected ${result.full_name}.`);
       onSuccess();
@@ -366,10 +411,10 @@ function PickRepoStep({
     } finally {
       setBusy(false);
     }
-  };
+  });
 
   return (
-    <div className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} className="flex flex-col gap-4">
       {/* Numeric installation ID input */}
       <div className="flex flex-col gap-1">
         <label
@@ -383,15 +428,20 @@ function PickRepoStep({
           type="number"
           min={1}
           placeholder="e.g. 12345678"
-          value={numericInstallId}
-          onChange={(e) => onNumericInstallIdChange(e.target.value)}
+          {...register("installation_id", { valueAsNumber: true })}
           className="rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
-        <p className="text-xs text-muted-foreground">
-          Find this in the GitHub App callback response (
-          <code className="rounded bg-muted px-1 text-xs">installation_id</code> field)
-          or your GitHub App settings.
-        </p>
+        {errors.installation_id ? (
+          <p className="text-xs text-destructive" role="alert">
+            {errors.installation_id.message}
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Find this in the GitHub App callback response (
+            <code className="rounded bg-muted px-1 text-xs">installation_id</code>{" "}
+            field) or your GitHub App settings.
+          </p>
+        )}
       </div>
 
       {/* Available repos list */}
@@ -412,14 +462,19 @@ function PickRepoStep({
           <p className="text-xs font-medium text-foreground">
             Select a repository
           </p>
+          {errors.github_repo_id ? (
+            <p className="text-xs text-destructive" role="alert">
+              {errors.github_repo_id.message}
+            </p>
+          ) : null}
           <ul className="max-h-48 divide-y divide-border overflow-y-auto rounded-md border border-border bg-card">
             {available.data.repositories.map((repo) => (
               <li key={repo.id}>
                 <button
                   type="button"
-                  onClick={() => setSelected(repo)}
+                  onClick={() => handleSelectRepo(repo)}
                   className={`w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground ${
-                    selected?.id === repo.id
+                    selectedRepoId === repo.id
                       ? "bg-primary/10 font-medium"
                       : ""
                   }`}
@@ -439,25 +494,12 @@ function PickRepoStep({
       )}
 
       <button
-        type="button"
-        disabled={!canConnect || busy}
-        onClick={handleConnect}
+        type="submit"
+        disabled={busy}
         className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {busy ? "Connecting…" : "Connect repository"}
       </button>
-    </div>
+    </form>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Layout helper
-// ---------------------------------------------------------------------------
-
-function PageContainer({
-  children,
-}: {
-  readonly children: React.ReactNode;
-}): JSX.Element {
-  return <div className="container max-w-3xl py-8">{children}</div>;
 }

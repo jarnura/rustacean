@@ -73,7 +73,8 @@ export function useConnectRepo(tenantId: string) {
   });
 }
 
-export function useTriggerIngest() {
+export function useTriggerIngest(tenantId: string) {
+  const qc = useQueryClient();
   return useMutation<TriggerIngestResponse, ApiError, string>({
     mutationFn: async (repoId) => {
       const { data, error, response } = await apiClient.POST(
@@ -84,6 +85,9 @@ export function useTriggerIngest() {
         throw toApiError(response.status, error);
       }
       return data;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: reposQueryKey(tenantId) });
     },
   });
 }

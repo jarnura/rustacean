@@ -634,6 +634,52 @@
         }
       }
     },
+    "/v1/repos/{id}/ingest": {
+      "post": {
+        "tags": [
+          "repos"
+        ],
+        "summary": "Trigger an asynchronous ingestion run for a connected repository.",
+        "description": "Returns 202 immediately; ingestion is processed asynchronously by the worker.\n404 if the repository does not exist or belongs to another tenant.\n409 if an ingestion run is already queued or running for this repo.",
+        "operationId": "trigger_ingest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Repository UUID (from POST /v1/repos)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Ingestion run queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerIngestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated or session expired"
+          },
+          "403": {
+            "description": "Email not verified"
+          },
+          "404": {
+            "description": "Repository not found or belongs to another tenant"
+          },
+          "409": {
+            "description": "Ingestion run already in-flight (ingest_run_already_in_flight)"
+          }
+        }
+      }
+    },
     "/v1/tenants/{id}/members": {
       "get": {
         "tags": [
@@ -1486,6 +1532,27 @@
             "type": "string",
             "format": "uuid",
             "description": "User ID of the existing member to promote to owner."
+          }
+        }
+      },
+      "TriggerIngestResponse": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "repo_id",
+          "status"
+        ],
+        "properties": {
+          "repo_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
           }
         }
       },

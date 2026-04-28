@@ -33,6 +33,7 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
         tenants::remove_member,
         tenants::transfer_ownership,
         repos::connect_repo,
+        repos::trigger_ingest,
     ),
     components(
         schemas(
@@ -68,6 +69,7 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
             tenants::TransferOwnershipRequest,
             repos::ConnectRepoRequest,
             repos::ConnectRepoResponse,
+            repos::TriggerIngestResponse,
         )
     ),
     info(

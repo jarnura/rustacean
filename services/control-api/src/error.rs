@@ -51,6 +51,8 @@ pub enum AppError {
     RepoNotAccessible,
     #[error("repository is already connected to this tenant")]
     RepoAlreadyConnected,
+    #[error("an ingestion run is already in progress for this repository")]
+    IngestRunAlreadyInFlight,
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
     #[error("auth error: {0}")]
@@ -113,6 +115,11 @@ impl IntoResponse for AppError {
             AppError::RepoAlreadyConnected => {
                 (StatusCode::CONFLICT, "repo_already_connected", self.to_string())
             }
+            AppError::IngestRunAlreadyInFlight => (
+                StatusCode::CONFLICT,
+                "ingest_run_already_in_flight",
+                self.to_string(),
+            ),
             AppError::Database(e) => {
                 tracing::error!(error = %e, "database error");
                 (

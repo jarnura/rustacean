@@ -8,7 +8,7 @@ import { apiClient, toApiError, type ApiError } from "../client";
 import type { components } from "../generated/schema";
 
 type RepoItem = components["schemas"]["RepoItem"];
-type ListReposResponse = components["schemas"]["ListReposResponse"];
+type ConnectedReposResponse = components["schemas"]["ConnectedReposResponse"];
 type ConnectRepoRequest = components["schemas"]["ConnectRepoRequest"];
 type ConnectRepoResponse = components["schemas"]["ConnectRepoResponse"];
 type TriggerIngestResponse = components["schemas"]["TriggerIngestResponse"];
@@ -41,9 +41,9 @@ export const availableReposQueryKey = (installationId: string, page: number) =>
 
 export function useRepos(
   tenantId: string,
-  options?: Omit<UseQueryOptions<ListReposResponse, ApiError>, "queryKey" | "queryFn">,
+  options?: Omit<UseQueryOptions<ConnectedReposResponse, ApiError>, "queryKey" | "queryFn">,
 ) {
-  return useQuery<ListReposResponse, ApiError>({
+  return useQuery<ConnectedReposResponse, ApiError>({
     queryKey: reposQueryKey(tenantId),
     queryFn: async () => {
       const { data, error, response } = await apiClient.GET("/v1/repos");

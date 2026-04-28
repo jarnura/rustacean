@@ -141,7 +141,7 @@ test.describe("Axe accessibility scan — main routes", () => {
 
     await page.goto("/members");
     await expect(
-      page.getByRole("heading", { name: "Members" }),
+      page.getByRole("heading", { name: "Members", exact: true }),
     ).toBeVisible();
 
     const violations = await scanPage(page);

@@ -4,6 +4,7 @@ import {
   REPOS_RESPONSE,
   REPO_ITEM,
   INGEST_RESPONSE,
+  CONNECT_REPO_RESPONSE,
 } from "./fixtures/mock-api";
 import { RepoDetailPage } from "./pages/RepoDetailPage";
 
@@ -75,24 +76,37 @@ test.describe("TanStack Query invalidation on mutation success", () => {
     await page.route("**/v1/repos", async (route) => {
       if (route.request().method() === "GET") {
         reposGetCount++;
-        await route.fulfill({ json: { repos: [] } });
+        await route.fulfill({ json: REPOS_RESPONSE });
       } else if (route.request().method() === "POST") {
-        // Simulate a successful connect
-        await route.fulfill({
-          json: {
-            repo_id: "repo-2",
-            full_name: "acme/api",
-            installation_id: "install-uuid-1",
-            default_branch: "main",
-            status: "connected",
-            connected_at: "2024-01-01T00:00:00Z",
-            connected_by: "user-1",
-          },
-        });
+        await route.fulfill({ json: CONNECT_REPO_RESPONSE });
       } else {
         await route.continue();
       }
     });
+
+    // Provide an available repo so the picker populates and github_repo_id can be set.
+    await page.route(
+      "**/v1/github/installations/*/available-repos",
+      (route) =>
+        route.fulfill({
+          json: {
+            total_count: 1,
+            page: 1,
+            per_page: 30,
+            repositories: [
+              {
+                id: 99999,
+                name: "api",
+                full_name: "acme/api",
+                private: false,
+                archived: false,
+                default_branch: "main",
+                html_url: "https://github.com/acme/api",
+              },
+            ],
+          },
+        }),
+    );
 
     await page.goto("/repos");
     await page.waitForLoadState("networkidle");
@@ -100,11 +114,13 @@ test.describe("TanStack Query invalidation on mutation success", () => {
     const countAfterLoad = reposGetCount;
     expect(countAfterLoad).toBeGreaterThanOrEqual(1);
 
-    // Open dialog and advance to the pick step.
+    // With REPOS_RESPONSE, knownInstallationId = "install-uuid-1", so the
+    // dialog opens directly at the pick step — no install-step button needed.
     await page.getByRole("button", { name: "Connect a repo" }).click();
-    await page
-      .getByRole("button", { name: /I've installed the app/ })
-      .click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+
+    // Wait for the available-repo entry and click it to set github_repo_id.
+    await page.getByRole("button", { name: /acme\/api/ }).click();
 
     // Fill in a valid numeric installation ID so Zod accepts the form.
     await page.locator("#numeric-install-id").fill("12345678");

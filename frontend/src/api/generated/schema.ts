@@ -494,12 +494,6 @@ export interface components {
             readonly name: string;
             readonly scopes: readonly components["schemas"]["Scope"][];
         };
-        readonly CallbackResponse: {
-            readonly account_login: string;
-            readonly account_type: string;
-            /** Format: int64 */
-            readonly installation_id: number;
-        };
         readonly ConnectRepoRequest: {
             /** @description Default branch override. If omitted, the value is fetched from GitHub. */
             readonly default_branch?: string | null;
@@ -1089,14 +1083,12 @@ export interface operations {
         };
         readonly requestBody?: never;
         readonly responses: {
-            /** @description Installation created or updated */
-            readonly 200: {
+            /** @description Redirect to frontend repos page */
+            readonly 302: {
                 headers: {
                     readonly [name: string]: unknown;
                 };
-                content: {
-                    readonly "application/json": components["schemas"]["CallbackResponse"];
-                };
+                content?: never;
             };
             /** @description Invalid or expired state token */
             readonly 400: {

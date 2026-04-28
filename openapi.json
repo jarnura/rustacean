@@ -368,15 +368,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Installation created or updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CallbackResponse"
-                }
-              }
-            }
+          "302": {
+            "description": "Redirect to frontend repos page"
           },
           "400": {
             "description": "Invalid or expired state token"
@@ -1003,26 +996,6 @@
             "items": {
               "$ref": "#/components/schemas/Scope"
             }
-          }
-        }
-      },
-      "CallbackResponse": {
-        "type": "object",
-        "required": [
-          "installation_id",
-          "account_login",
-          "account_type"
-        ],
-        "properties": {
-          "account_login": {
-            "type": "string"
-          },
-          "account_type": {
-            "type": "string"
-          },
-          "installation_id": {
-            "type": "integer",
-            "format": "int64"
           }
         }
       },

@@ -343,6 +343,32 @@ async fn webhook_returns_202_for_unmodelled_installation_action() {
     assert_eq!(resp.status(), StatusCode::ACCEPTED);
 }
 
+// ─── GitHub callback tests ──────────────────────────────────────────────────
+
+#[tokio::test]
+async fn callback_returns_503_when_app_not_configured() {
+    let app = build(state_without_gh());
+    let req = Request::builder()
+        .method("GET")
+        .uri("/v1/github/callback?installation_id=1&state=aabbcc")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn callback_returns_400_for_invalid_hex_state() {
+    let app = build(state_with_gh(b"shh"));
+    let req = Request::builder()
+        .method("GET")
+        .uri("/v1/github/callback?installation_id=1&state=not-valid-hex!")
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
 /// `installation_repositories` with action other than added/removed (e.g.
 /// future GitHub additions) returns 202.
 #[tokio::test]

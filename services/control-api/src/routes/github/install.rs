@@ -4,11 +4,12 @@
 use axum::{
     Json,
     extract::{Query, State},
-    response::IntoResponse,
+    response::{IntoResponse, Redirect},
 };
 use rand::RngCore as _;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use urlencoding::encode as urlencode;
 use uuid::Uuid;
 
 use crate::{
@@ -86,13 +87,6 @@ pub struct CallbackParams {
     pub setup_action: Option<String>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-pub struct CallbackResponse {
-    pub installation_id: i64,
-    pub account_login: String,
-    pub account_type: String,
-}
-
 #[utoipa::path(
     get,
     path = "/v1/github/callback",
@@ -102,7 +96,7 @@ pub struct CallbackResponse {
         ("setup_action" = Option<String>, Query, description = "install or update"),
     ),
     responses(
-        (status = 200, description = "Installation created or updated", body = CallbackResponse),
+        (status = 302, description = "Redirect to frontend repos page"),
         (status = 400, description = "Invalid or expired state token"),
         (status = 503, description = "GitHub App not configured on this instance"),
     ),
@@ -139,7 +133,7 @@ pub async fn github_callback(
         AppError::Internal(anyhow::anyhow!("failed to fetch GitHub installation"))
     })?;
 
-    sqlx::query(
+    let (installation_uuid,): (Uuid,) = sqlx::query_as(
         "INSERT INTO control.github_installations \
          (id, tenant_id, github_installation_id, account_login, account_type, account_id) \
          VALUES ($1, $2, $3, $4, $5, $6) \
@@ -149,7 +143,8 @@ pub async fn github_callback(
            account_type  = EXCLUDED.account_type, \
            account_id    = EXCLUDED.account_id, \
            deleted_at    = NULL, \
-           suspended_at  = NULL",
+           suspended_at  = NULL \
+         RETURNING id",
     )
     .bind(Uuid::new_v4())
     .bind(tenant_id)
@@ -157,23 +152,25 @@ pub async fn github_callback(
     .bind(&info.account.login)
     .bind(&info.account.kind)
     .bind(info.account.id)
-    .execute(&state.pool)
+    .fetch_one(&state.pool)
     .await?;
 
     tracing::info!(
         tenant_id = %tenant_id,
         user_id = %user_id,
         installation_id = params.installation_id,
+        installation_uuid = %installation_uuid,
         account = %info.account.login,
         setup_action = ?params.setup_action,
         "github callback: installation upserted"
     );
 
-    Ok(Json(CallbackResponse {
-        installation_id: params.installation_id,
-        account_login: info.account.login,
-        account_type: info.account.kind,
-    }))
+    Ok(Redirect::to(&format!(
+        "{}/repos?install=success&installation_uuid={}&account_login={}",
+        state.config.base_url,
+        installation_uuid,
+        urlencode(&info.account.login),
+    )))
 }
 
 #[cfg(test)]
@@ -189,19 +186,6 @@ mod tests {
         let v = serde_json::to_value(&resp).unwrap();
         assert!(v["url"].as_str().unwrap().contains("state=abc"));
         assert_eq!(v["state_token"], "abc");
-    }
-
-    #[test]
-    fn callback_response_serializes_all_fields() {
-        let resp = CallbackResponse {
-            installation_id: 42,
-            account_login: "octo-org".to_owned(),
-            account_type: "Organization".to_owned(),
-        };
-        let v = serde_json::to_value(&resp).unwrap();
-        assert_eq!(v["installation_id"], 42);
-        assert_eq!(v["account_login"], "octo-org");
-        assert_eq!(v["account_type"], "Organization");
     }
 
     #[test]

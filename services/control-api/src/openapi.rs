@@ -41,7 +41,6 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
             health::ProbeResponse,
             github::health::GithubAppHealthResponse,
             github::install::InstallUrlResponse,
-            github::install::CallbackResponse,
             github::repos::RepoItemResponse,
             github::repos::ListReposResponse,
             auth::SignupRequest,

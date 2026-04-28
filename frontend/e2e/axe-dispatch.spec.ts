@@ -2,6 +2,12 @@ import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { mkdirSync, writeFileSync } from "fs";
 import path from "path";
+import {
+  ME_RESPONSE,
+  REPOS_RESPONSE,
+  MEMBERS_RESPONSE,
+  API_KEYS_RESPONSE,
+} from "./fixtures/mock-api";
 
 const ALL_ROUTES = [
   "/login",
@@ -16,6 +22,27 @@ const ALL_ROUTES = [
 
 const scanRouteEnv = (process.env.SCAN_ROUTE ?? "").trim();
 const routes: string[] = scanRouteEnv ? [scanRouteEnv] : [...ALL_ROUTES];
+
+type MockFn = (page: import("@playwright/test").Page) => Promise<void>;
+
+const ROUTE_MOCKS: Partial<Record<string, MockFn>> = {
+  "/repos": async (page) => {
+    await page.route("**/v1/me", (r) => r.fulfill({ json: ME_RESPONSE }));
+    await page.route("**/v1/repos", (r) => r.fulfill({ json: REPOS_RESPONSE }));
+  },
+  "/members": async (page) => {
+    await page.route("**/v1/me", (r) => r.fulfill({ json: ME_RESPONSE }));
+    await page.route("**/v1/tenants/*/members", (r) =>
+      r.fulfill({ json: MEMBERS_RESPONSE }),
+    );
+  },
+  "/api-keys": async (page) => {
+    await page.route("**/v1/me", (r) => r.fulfill({ json: ME_RESPONSE }));
+    await page.route("**/v1/api-keys", (r) =>
+      r.fulfill({ json: API_KEYS_RESPONSE }),
+    );
+  },
+};
 
 const OUT_DIR = path.resolve("axe-results");
 
@@ -63,6 +90,9 @@ test.describe("axe-dispatch", () => {
     const slug = routeToSlug(route);
 
     test(`axe scan: ${route}`, async ({ page }, testInfo) => {
+      const mock = ROUTE_MOCKS[route];
+      if (mock) await mock(page);
+
       await page.goto(route);
 
       const result = await new AxeBuilder({ page })
@@ -97,6 +127,9 @@ test.describe("axe-dispatch", () => {
     });
 
     test(`focus-trap probe: ${route}`, async ({ page }, testInfo) => {
+      const mock = ROUTE_MOCKS[route];
+      if (mock) await mock(page);
+
       await page.goto(route);
 
       const focusOrder: FocusEntry[] = [];

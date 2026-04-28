@@ -41,14 +41,23 @@ test.describe("TanStack Query invalidation on mutation success", () => {
     const countAfterLoad = reposGetCount;
     expect(countAfterLoad).toBeGreaterThanOrEqual(1);
 
+    // Listen for the invalidation refetch before triggering the mutation.
+    const refetchPromise = page.waitForResponse(
+      (r) => {
+        const url = new URL(r.url());
+        return url.pathname === "/v1/repos" && r.request().method() === "GET";
+      },
+      { timeout: 10_000 },
+    );
+
     // Trigger ingestion — fires POST /v1/repos/{id}/ingest.
     await repoDetailPage.triggerIngestion();
 
-    // The success toast / queued message confirms the mutation resolved.
+    // The success message confirms the mutation resolved.
     await expect(repoDetailPage.ingestQueuedMessage).toBeVisible();
 
     // Wait for TanStack Query to complete the invalidation refetch.
-    await page.waitForLoadState("networkidle");
+    await refetchPromise;
 
     // The query key invalidation must have triggered at least one more GET.
     expect(reposGetCount).toBeGreaterThan(countAfterLoad);
@@ -100,10 +109,20 @@ test.describe("TanStack Query invalidation on mutation success", () => {
     // Fill in a valid numeric installation ID so Zod accepts the form.
     await page.locator("#numeric-install-id").fill("12345678");
 
+    // Listen for the invalidation refetch BEFORE submitting so we don't miss it.
+    const refetchPromise = page.waitForResponse(
+      (r) => {
+        const url = new URL(r.url());
+        return url.pathname === "/v1/repos" && r.request().method() === "GET";
+      },
+      { timeout: 10_000 },
+    );
+
     // Submit — triggers POST /v1/repos which calls onSuccess → invalidateQueries.
     await page.getByRole("button", { name: "Connect repository" }).click();
 
-    await page.waitForLoadState("networkidle");
+    // Wait for TanStack Query to complete the invalidation refetch.
+    await refetchPromise;
 
     // Repos query must have been refetched.
     expect(reposGetCount).toBeGreaterThan(countAfterLoad);

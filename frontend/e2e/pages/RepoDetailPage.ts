@@ -9,7 +9,9 @@ export class RepoDetailPage {
     this.triggerIngestButton = page.getByRole("button", {
       name: "Trigger ingestion",
     });
-    this.ingestQueuedMessage = page.getByText("Ingestion run queued");
+    this.ingestQueuedMessage = page.getByText("Ingestion run queued", {
+      exact: true,
+    });
     this.repoHeading = page.getByRole("heading", { level: 1 });
   }
 

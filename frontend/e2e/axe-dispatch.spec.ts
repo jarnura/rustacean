@@ -94,6 +94,7 @@ test.describe("axe-dispatch", () => {
       if (mock) await mock(page);
 
       await page.goto(route);
+      await page.waitForLoadState("networkidle");
 
       const result = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])

@@ -476,6 +476,7 @@ dependencies = [
  "hmac",
  "http-body-util",
  "jsonwebtoken",
+ "rand 0.9.4",
  "rb-auth",
  "rb-email",
  "rb-github",

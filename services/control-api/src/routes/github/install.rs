@@ -1,0 +1,221 @@
+//! GET /v1/github/install-url  — generate a single-use App install URL (REQ-GH-02)
+//! GET /v1/github/callback     — validate state token and create installation row (REQ-GH-02)
+
+use axum::{
+    Json,
+    extract::{Query, State},
+    response::IntoResponse,
+};
+use rand::RngCore as _;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use uuid::Uuid;
+
+use crate::{
+    error::AppError,
+    middleware::auth::{AuthContext, require_verified_session},
+    state::AppState,
+};
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct InstallUrlResponse {
+    /// Full GitHub App install URL to open in the browser.
+    pub url: String,
+    /// The raw opaque state token embedded in the URL.
+    pub state_token: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/github/install-url",
+    responses(
+        (status = 200, description = "Install URL generated", body = InstallUrlResponse),
+        (status = 401, description = "Not authenticated or session expired"),
+        (status = 403, description = "Email not verified"),
+        (status = 503, description = "GitHub App not configured on this instance"),
+    ),
+    tag = "github"
+)]
+pub async fn github_install_url(
+    State(state): State<AppState>,
+    auth: AuthContext,
+) -> Result<impl IntoResponse, AppError> {
+    let session = require_verified_session(auth)?;
+    let gh = state.gh.as_ref().ok_or(AppError::GithubAppNotConfigured)?;
+
+    let identity = gh.check_identity().await.map_err(|e| {
+        tracing::error!(error = %e, "install-url: GitHub App identity unavailable");
+        AppError::Internal(anyhow::anyhow!("GitHub App identity unavailable"))
+    })?;
+
+    let mut raw = [0u8; 32];
+    rand::rng().fill_bytes(&mut raw);
+    let token_hex = hex::encode(raw);
+    let token_hash = rb_github::hash_token(&raw);
+
+    sqlx::query(
+        "INSERT INTO control.github_install_states \
+         (token_hash, tenant_id, user_id, expires_at, created_at) \
+         VALUES ($1, $2, $3, now() + interval '10 minutes', now())",
+    )
+    .bind(&token_hash)
+    .bind(session.tenant_id)
+    .bind(session.user_id)
+    .execute(&state.pool)
+    .await?;
+
+    let url = format!(
+        "https://github.com/apps/{}/installations/new?state={}",
+        identity.slug, token_hex
+    );
+
+    tracing::info!(
+        tenant_id = %session.tenant_id,
+        user_id = %session.user_id,
+        "github install-url: state token issued"
+    );
+
+    Ok(Json(InstallUrlResponse { url, state_token: token_hex }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CallbackParams {
+    pub installation_id: i64,
+    pub state: String,
+    #[serde(default)]
+    pub setup_action: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CallbackResponse {
+    pub installation_id: i64,
+    pub account_login: String,
+    pub account_type: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/github/callback",
+    params(
+        ("installation_id" = i64, Query, description = "GitHub numeric installation ID"),
+        ("state" = String, Query, description = "Opaque state token from install-url"),
+        ("setup_action" = Option<String>, Query, description = "install or update"),
+    ),
+    responses(
+        (status = 200, description = "Installation created or updated", body = CallbackResponse),
+        (status = 400, description = "Invalid or expired state token"),
+        (status = 503, description = "GitHub App not configured on this instance"),
+    ),
+    tag = "github"
+)]
+pub async fn github_callback(
+    State(state): State<AppState>,
+    Query(params): Query<CallbackParams>,
+) -> Result<impl IntoResponse, AppError> {
+    let gh = state.gh.as_ref().ok_or(AppError::GithubAppNotConfigured)?;
+
+    let raw = hex::decode(&params.state).map_err(|_| AppError::InvalidToken)?;
+    let token_hash = rb_github::hash_token(&raw);
+    let row: Option<(Uuid, Uuid)> = sqlx::query_as(
+        "UPDATE control.github_install_states \
+         SET used_at = now() \
+         WHERE token_hash = $1 \
+           AND used_at IS NULL \
+           AND expires_at > now() \
+         RETURNING tenant_id, user_id",
+    )
+    .bind(&token_hash)
+    .fetch_optional(&state.pool)
+    .await?;
+
+    let (tenant_id, user_id) = row.ok_or(AppError::InvalidToken)?;
+
+    let info = gh.fetch_installation(params.installation_id).await.map_err(|e| {
+        tracing::error!(
+            installation_id = params.installation_id,
+            error = %e,
+            "callback: failed to fetch installation from GitHub"
+        );
+        AppError::Internal(anyhow::anyhow!("failed to fetch GitHub installation"))
+    })?;
+
+    sqlx::query(
+        "INSERT INTO control.github_installations \
+         (id, tenant_id, github_installation_id, account_login, account_type, account_id) \
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         ON CONFLICT (github_installation_id) \
+         DO UPDATE SET \
+           account_login = EXCLUDED.account_login, \
+           account_type  = EXCLUDED.account_type, \
+           account_id    = EXCLUDED.account_id, \
+           deleted_at    = NULL, \
+           suspended_at  = NULL",
+    )
+    .bind(Uuid::new_v4())
+    .bind(tenant_id)
+    .bind(params.installation_id)
+    .bind(&info.account.login)
+    .bind(&info.account.kind)
+    .bind(info.account.id)
+    .execute(&state.pool)
+    .await?;
+
+    tracing::info!(
+        tenant_id = %tenant_id,
+        user_id = %user_id,
+        installation_id = params.installation_id,
+        account = %info.account.login,
+        setup_action = ?params.setup_action,
+        "github callback: installation upserted"
+    );
+
+    Ok(Json(CallbackResponse {
+        installation_id: params.installation_id,
+        account_login: info.account.login,
+        account_type: info.account.kind,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn install_url_response_serializes() {
+        let resp = InstallUrlResponse {
+            url: "https://github.com/apps/my-app/installations/new?state=abc".to_owned(),
+            state_token: "abc".to_owned(),
+        };
+        let v = serde_json::to_value(&resp).unwrap();
+        assert!(v["url"].as_str().unwrap().contains("state=abc"));
+        assert_eq!(v["state_token"], "abc");
+    }
+
+    #[test]
+    fn callback_response_serializes_all_fields() {
+        let resp = CallbackResponse {
+            installation_id: 42,
+            account_login: "octo-org".to_owned(),
+            account_type: "Organization".to_owned(),
+        };
+        let v = serde_json::to_value(&resp).unwrap();
+        assert_eq!(v["installation_id"], 42);
+        assert_eq!(v["account_login"], "octo-org");
+        assert_eq!(v["account_type"], "Organization");
+    }
+
+    #[test]
+    fn state_token_round_trip() {
+        let raw = [0xdeu8; 32];
+        let token_hex = hex::encode(raw);
+        let hash_at_generation = rb_github::hash_token(&raw);
+        let decoded = hex::decode(&token_hex).unwrap();
+        let hash_at_callback = rb_github::hash_token(&decoded);
+        assert_eq!(hash_at_generation, hash_at_callback);
+    }
+
+    #[test]
+    fn state_token_invalid_hex_is_rejected() {
+        assert!(hex::decode("not-valid-hex!").is_err());
+    }
+}

@@ -27,8 +27,8 @@ use crate::{
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct ConnectRepoRequest {
-    /// GitHub numeric installation ID (from the App install callback).
-    pub installation_id: i64,
+    /// Internal installation UUID (from the GitHub App install redirect).
+    pub installation_id: Uuid,
     /// GitHub numeric repository ID (from the list-repos response).
     pub github_repo_id: i64,
     /// Default branch override. If omitted, the value is fetched from GitHub.
@@ -108,9 +108,9 @@ pub async fn connect_repo(
 
     let gh = state.gh.as_ref().ok_or(AppError::GithubAppNotConfigured)?;
 
-    let row: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT id FROM control.github_installations \
-         WHERE github_installation_id = $1 \
+    let row: Option<(i64,)> = sqlx::query_as(
+        "SELECT github_installation_id FROM control.github_installations \
+         WHERE id = $1 \
            AND tenant_id = $2 \
            AND deleted_at IS NULL \
            AND suspended_at IS NULL",
@@ -120,10 +120,10 @@ pub async fn connect_repo(
     .fetch_optional(&state.pool)
     .await?;
 
-    let (installation_uuid,) = row.ok_or(AppError::NotFound)?;
+    let (numeric_installation_id,) = row.ok_or(AppError::NotFound)?;
 
     let repo_info = gh
-        .fetch_repo(body.installation_id, body.github_repo_id)
+        .fetch_repo(numeric_installation_id, body.github_repo_id)
         .await
         .map_err(|e| match e {
             GhError::ApiError { status: 404, .. } | GhError::ApiError { status: 403, .. } => {
@@ -142,7 +142,7 @@ pub async fn connect_repo(
     )
     .bind(repo_id)
     .bind(session.tenant_id)
-    .bind(installation_uuid)
+    .bind(body.installation_id)
     .bind(body.github_repo_id)
     .bind(&repo_info.full_name)
     .bind(&default_branch)

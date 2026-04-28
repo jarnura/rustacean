@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -67,12 +67,35 @@ interface ReposPageInnerProps {
 function ReposPageInner({ tenantId }: ReposPageInnerProps): JSX.Element {
   const repos = useRepos(tenantId);
   const [showConnect, setShowConnect] = useState(false);
+  const [dialogInstallId, setDialogInstallId] = useState<string | null>(null);
+  const search = useSearch({ from: routes.repos });
 
   const connectedList: readonly RepoItem[] = repos.data?.repos ?? [];
+  const installHandledRef = useRef(false);
 
-  // Derive the installation UUID from the first connected repo (if any).
-  // This lets us populate the available-repos picker for subsequent connects.
-  const knownInstallationId = connectedList[0]?.installation_id ?? null;
+  // Auto-open connect dialog when redirected back from GitHub App install.
+  // We use window.history.replaceState instead of navigate() to clean the URL
+  // without going through TanStack Router, which would remount this component
+  // and reset the ref — causing a duplicate toast.
+  useEffect(() => {
+    if (!installHandledRef.current && search.install === "success" && search.installation_uuid) {
+      installHandledRef.current = true;
+      setDialogInstallId(search.installation_uuid);
+      setShowConnect(true);
+      toast.success(
+        search.account_login
+          ? `Installed on ${search.account_login}. Pick a repo to connect.`
+          : "App installed. Pick a repo to connect.",
+      );
+      window.history.replaceState(null, "", routes.repos);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Derive the installation UUID from the first connected repo (if any) as
+  // fallback for returning users who already have a connection.
+  const knownInstallationId =
+    dialogInstallId ?? connectedList[0]?.installation_id ?? null;
 
   return (
     <PageContainer>
@@ -209,12 +232,8 @@ function ConnectRepoDialog({
   onClose,
   onSuccess,
 }: ConnectRepoDialogProps): JSX.Element {
-  const [step, setStep] = useState<ConnectStep>(
-    installationId ? "pick" : "install",
-  );
-  const [resolvedInstallId, setResolvedInstallId] = useState<string>(
-    installationId ?? "",
-  );
+  const step: ConnectStep = installationId ? "pick" : "install";
+  const resolvedInstallId = installationId ?? "";
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -291,12 +310,7 @@ function ConnectRepoDialog({
         </div>
 
         {step === "install" ? (
-          <InstallStep
-            onInstalled={(installUuid) => {
-              setResolvedInstallId(installUuid);
-              setStep("pick");
-            }}
-          />
+          <InstallStep />
         ) : (
           <PickRepoStep
             tenantId={tenantId}
@@ -313,17 +327,13 @@ function ConnectRepoDialog({
 // Step 1 — Install GitHub App
 // ---------------------------------------------------------------------------
 
-function InstallStep({
-  onInstalled,
-}: {
-  readonly onInstalled: (installUuid: string) => void;
-}): JSX.Element {
+function InstallStep(): JSX.Element {
   const installUrl = useGithubInstallUrl();
 
   const handleInstall = async () => {
     try {
       const result = await installUrl.mutateAsync();
-      window.open(result.url, "_blank", "noopener");
+      window.location.assign(result.url);
     } catch (err) {
       toast.error(formatApiError(err, "Could not generate install link."));
     }
@@ -333,7 +343,8 @@ function InstallStep({
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
         First, install the GitHub App on the organization or account that owns
-        the repositories you want to connect.
+        the repositories you want to connect. You&apos;ll be redirected back
+        here automatically after installing.
       </p>
       <button
         type="button"
@@ -342,17 +353,6 @@ function InstallStep({
         className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {installUrl.isPending ? "Generating link…" : "Install GitHub App →"}
-      </button>
-      <p className="text-xs text-muted-foreground">
-        After installing, return here and click{" "}
-        <strong>I&apos;ve installed the app</strong>.
-      </p>
-      <button
-        type="button"
-        onClick={() => onInstalled("")}
-        className="self-start text-sm font-medium text-primary hover:underline"
-      >
-        I&apos;ve installed the app →
       </button>
     </div>
   );
@@ -380,7 +380,6 @@ function PickRepoStep({
   const [busy, setBusy] = useState(false);
 
   const {
-    register,
     handleSubmit,
     setValue,
     watch,
@@ -400,7 +399,7 @@ function PickRepoStep({
     setBusy(true);
     try {
       const result = await connect.mutateAsync({
-        installation_id: values.installation_id,
+        installation_id: installationUuid,
         github_repo_id: values.github_repo_id,
         default_branch: values.default_branch ?? null,
       });
@@ -415,35 +414,6 @@ function PickRepoStep({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      {/* Numeric installation ID input */}
-      <div className="flex flex-col gap-1">
-        <label
-          htmlFor="numeric-install-id"
-          className="text-xs font-medium text-foreground"
-        >
-          GitHub installation ID (numeric)
-        </label>
-        <input
-          id="numeric-install-id"
-          type="number"
-          min={1}
-          placeholder="e.g. 12345678"
-          {...register("installation_id", { valueAsNumber: true })}
-          className="rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-        {errors.installation_id ? (
-          <p className="text-xs text-destructive" role="alert">
-            {errors.installation_id.message}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Find this in the GitHub App callback response (
-            <code className="rounded bg-muted px-1 text-xs">installation_id</code>{" "}
-            field) or your GitHub App settings.
-          </p>
-        )}
-      </div>
-
       {/* Available repos list */}
       {installationUuid.length === 0 ? (
         <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">

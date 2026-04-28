@@ -12,5 +12,11 @@
     "moduleDetection": "force",
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "eslint.config.js", "scripts/**/*.mjs"]
+  "include": [
+    "vite.config.ts",
+    "eslint.config.js",
+    "scripts/**/*.mjs",
+    "playwright.config.ts",
+    "e2e/**/*.ts"
+  ]
 }

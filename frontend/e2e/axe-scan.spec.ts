@@ -31,6 +31,8 @@ const ROUTE_MOCKS: Partial<Record<string, MockFn>> = {
     await mockAuthenticatedSession(page);
     await page.route("**/v1/repos", (r) => r.fulfill({ json: REPOS_RESPONSE }));
   },
+  // "/repos-empty" is a conceptual alias: the real route is /repos but mocked
+  // with an empty list to exercise the empty-state UI branch.
   "/repos-empty": async (page) => {
     await mockAuthenticatedSession(page);
     await page.route("**/v1/repos", (r) =>

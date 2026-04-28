@@ -104,8 +104,9 @@ test.describe("Field-level validation errors", () => {
       // Submit without filling any fields
       await page.getByRole("button", { name: "Connect repository" }).click();
 
-      // A role="alert" paragraph renders under the installation_id input
-      const alert = page.locator('[role="alert"]').first();
+      // A role="alert" paragraph renders under the installation_id input.
+      // Scoped to the dialog to avoid matching unrelated alerts on the page.
+      const alert = page.getByRole("dialog").locator('[role="alert"]').first();
       await expect(alert).toBeVisible();
       await expect(alert).toContainText(/installation id|positive integer/i);
     });

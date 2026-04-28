@@ -1046,9 +1046,9 @@
             "description": "GitHub numeric repository ID (from the list-repos response)."
           },
           "installation_id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "GitHub numeric installation ID (from the App install callback)."
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal installation UUID (from the GitHub App install redirect)."
           }
         }
       },

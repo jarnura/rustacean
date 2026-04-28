@@ -509,10 +509,10 @@ export interface components {
              */
             readonly github_repo_id: number;
             /**
-             * Format: int64
-             * @description GitHub numeric installation ID (from the App install callback).
+             * Format: uuid
+             * @description Internal installation UUID (from the GitHub App install redirect).
              */
-            readonly installation_id: number;
+            readonly installation_id: string;
         };
         readonly ConnectRepoResponse: {
             readonly default_branch: string;

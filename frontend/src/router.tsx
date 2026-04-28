@@ -78,9 +78,16 @@ const resetPasswordRoute = createRoute({
   component: ResetPasswordPage,
 });
 
+const reposSearchSchema = z.object({
+  install: z.enum(["success"]).optional(),
+  installation_uuid: z.uuid().optional(),
+  account_login: z.string().optional(),
+});
+
 const reposRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: routes.repos,
+  validateSearch: reposSearchSchema,
   component: ReposPage,
 });
 

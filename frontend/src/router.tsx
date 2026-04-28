@@ -12,7 +12,8 @@ import { ApiKeysPage } from "@/pages/ApiKeysPage";
 import { ForgotPasswordPage } from "@/pages/ForgotPasswordPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MembersPage } from "@/pages/MembersPage";
-import { ReposPlaceholderPage } from "@/pages/ReposPlaceholderPage";
+import { ReposPage } from "@/pages/ReposPage";
+import { RepoDetailPage } from "@/pages/RepoDetailPage";
 import { ResetPasswordPage } from "@/pages/ResetPasswordPage";
 import { SignupPage } from "@/pages/SignupPage";
 import { VerifyEmailPage } from "@/pages/VerifyEmailPage";
@@ -80,7 +81,13 @@ const resetPasswordRoute = createRoute({
 const reposRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: routes.repos,
-  component: ReposPlaceholderPage,
+  component: ReposPage,
+});
+
+const repoDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: routes.repoDetail,
+  component: RepoDetailPage,
 });
 
 const membersRoute = createRoute({
@@ -112,6 +119,7 @@ const routeTree = rootRoute.addChildren([
   forgotPasswordRoute,
   resetPasswordRoute,
   reposRoute,
+  repoDetailRoute,
   membersRoute,
   apiKeysRoute,
   catchAllRoute,

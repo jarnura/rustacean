@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -69,13 +69,17 @@ function ReposPageInner({ tenantId }: ReposPageInnerProps): JSX.Element {
   const [showConnect, setShowConnect] = useState(false);
   const [dialogInstallId, setDialogInstallId] = useState<string | null>(null);
   const search = useSearch({ from: routes.repos });
-  const navigate = useNavigate();
 
   const connectedList: readonly RepoItem[] = repos.data?.repos ?? [];
+  const installHandledRef = useRef(false);
 
   // Auto-open connect dialog when redirected back from GitHub App install.
+  // We use window.history.replaceState instead of navigate() to clean the URL
+  // without going through TanStack Router, which would remount this component
+  // and reset the ref — causing a duplicate toast.
   useEffect(() => {
-    if (search.install === "success" && search.installation_uuid) {
+    if (!installHandledRef.current && search.install === "success" && search.installation_uuid) {
+      installHandledRef.current = true;
       setDialogInstallId(search.installation_uuid);
       setShowConnect(true);
       toast.success(
@@ -83,7 +87,7 @@ function ReposPageInner({ tenantId }: ReposPageInnerProps): JSX.Element {
           ? `Installed on ${search.account_login}. Pick a repo to connect.`
           : "App installed. Pick a repo to connect.",
       );
-      void navigate({ to: routes.repos, search: {} });
+      window.history.replaceState(null, "", routes.repos);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

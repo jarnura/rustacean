@@ -85,8 +85,10 @@ test.describe("TanStack Query invalidation on mutation success", () => {
     });
 
     // Provide an available repo so the picker populates and github_repo_id can be set.
+    // The trailing ** is required: useAvailableRepos appends ?page=1&per_page=30 which
+    // would break Playwright's glob match if the pattern ends at the literal path segment.
     await page.route(
-      "**/v1/github/installations/*/available-repos",
+      "**/v1/github/installations/*/available-repos**",
       (route) =>
         route.fulfill({
           json: {

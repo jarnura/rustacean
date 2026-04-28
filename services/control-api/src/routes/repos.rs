@@ -1,5 +1,6 @@
 //! Repo management endpoints.
-//! - `POST /v1/repos` — Connect a GitHub repo to the tenant (REQ-GH-04).
+//! - `POST /v1/repos`          — Connect a GitHub repo to the tenant (REQ-GH-04).
+//! - `GET  /v1/repos`          — List connected repos for the tenant (REQ-GH-07).
 //! - `POST /v1/repos/{id}/ingest` — Trigger an ingestion run (REQ-GH-08).
 
 use axum::{
@@ -8,6 +9,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use chrono::{DateTime, Utc};
 use rb_github::GhError;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -19,9 +21,8 @@ use crate::{
     state::AppState,
 };
 
-
 // ---------------------------------------------------------------------------
-// POST /v1/repos
+// POST /v1/repos — request / response types
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -40,6 +41,43 @@ pub struct ConnectRepoResponse {
     pub full_name: String,
     pub default_branch: String,
 }
+
+// ---------------------------------------------------------------------------
+// GET /v1/repos — response types
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RepoItem {
+    pub repo_id: Uuid,
+    pub full_name: String,
+    pub default_branch: String,
+    pub status: String,
+    pub connected_by: Uuid,
+    pub connected_at: DateTime<Utc>,
+    pub installation_id: Uuid,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ConnectedReposResponse {
+    pub repos: Vec<RepoItem>,
+}
+
+type RepoRow = (Uuid, String, String, String, Uuid, DateTime<Utc>, Uuid);
+
+// ---------------------------------------------------------------------------
+// POST /v1/repos/{id}/ingest — response types
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TriggerIngestResponse {
+    pub run_id: Uuid,
+    pub repo_id: Uuid,
+    pub status: String,
+}
+
+// ---------------------------------------------------------------------------
+// POST /v1/repos
+// ---------------------------------------------------------------------------
 
 /// Connect a GitHub repository to the calling user's active tenant.
 ///
@@ -138,17 +176,56 @@ pub async fn connect_repo(
     ))
 }
 
+// ---------------------------------------------------------------------------
+// GET /v1/repos
+// ---------------------------------------------------------------------------
+
+/// List all connected repositories for the current session's tenant.
+///
+/// Soft-deleted repos (`archived_at IS NOT NULL`) are excluded.
+/// Results are ordered by `connected_at DESC` (most recently connected first).
+/// Requires a verified session.
+#[utoipa::path(
+    get,
+    path = "/v1/repos",
+    responses(
+        (status = 200, description = "List of connected repos", body = ConnectedReposResponse),
+        (status = 401, description = "Not authenticated or session expired"),
+        (status = 403, description = "Email not verified"),
+    ),
+    tag = "repos"
+)]
+pub async fn list_repos(
+    State(state): State<AppState>,
+    auth: AuthContext,
+) -> Result<impl IntoResponse, AppError> {
+    let session = require_verified_session(auth)?;
+
+    let rows: Vec<RepoRow> = sqlx::query_as(
+        "SELECT id, full_name, default_branch, status, connected_by, connected_at, installation_id \
+         FROM control.repos \
+         WHERE tenant_id = $1 AND archived_at IS NULL \
+         ORDER BY connected_at DESC",
+    )
+    .bind(session.tenant_id)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let repos = rows
+        .into_iter()
+        .map(
+            |(repo_id, full_name, default_branch, status, connected_by, connected_at, installation_id)| {
+                RepoItem { repo_id, full_name, default_branch, status, connected_by, connected_at, installation_id }
+            },
+        )
+        .collect();
+
+    Ok(Json(ConnectedReposResponse { repos }))
+}
 
 // ---------------------------------------------------------------------------
 // POST /v1/repos/{id}/ingest — REQ-GH-08
 // ---------------------------------------------------------------------------
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct TriggerIngestResponse {
-    pub run_id: Uuid,
-    pub repo_id: Uuid,
-    pub status: String,
-}
 
 /// Trigger an asynchronous ingestion run for a connected repository.
 ///
@@ -229,6 +306,9 @@ pub async fn trigger_ingest(
     ))
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -243,6 +323,8 @@ mod tests {
             email_verified: true,
         }
     }
+
+    // ----- connect_repo auth tests (REQ-GH-04) -----
 
     #[test]
     fn anonymous_auth_rejected() {
@@ -346,6 +428,8 @@ mod tests {
         assert_eq!(result, "main");
     }
 
+    // ----- trigger_ingest response types (REQ-GH-08) -----
+
     #[test]
     fn trigger_ingest_response_serializes_correctly() {
         let run_id = Uuid::new_v4();
@@ -394,5 +478,42 @@ mod tests {
             AppError::IngestRunAlreadyInFlight.to_string(),
             "an ingestion run is already in progress for this repository"
         );
+    }
+
+    // ----- list_repos response types (REQ-GH-07) -----
+
+    #[test]
+    fn repo_item_serializes_all_fields() {
+        let item = RepoItem {
+            repo_id: Uuid::new_v4(),
+            full_name: "acme/backend".to_owned(),
+            default_branch: "main".to_owned(),
+            status: "connected".to_owned(),
+            connected_by: Uuid::new_v4(),
+            connected_at: Utc::now(),
+            installation_id: Uuid::new_v4(),
+        };
+        let val = serde_json::to_value(&item).unwrap();
+        assert!(val.get("repo_id").is_some());
+        assert_eq!(val["full_name"], "acme/backend");
+        assert_eq!(val["default_branch"], "main");
+        assert_eq!(val["status"], "connected");
+        assert!(val.get("connected_by").is_some());
+        assert!(val.get("connected_at").is_some());
+        assert!(val.get("installation_id").is_some());
+    }
+
+    #[test]
+    fn list_response_wraps_repos_array() {
+        let resp = ConnectedReposResponse { repos: vec![] };
+        let val = serde_json::to_value(&resp).unwrap();
+        assert!(val["repos"].is_array());
+    }
+
+    #[test]
+    fn list_response_empty_is_valid() {
+        let resp = ConnectedReposResponse { repos: vec![] };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"repos\":[]"));
     }
 }

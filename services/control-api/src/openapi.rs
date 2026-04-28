@@ -33,6 +33,7 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
         tenants::remove_member,
         tenants::transfer_ownership,
         repos::connect_repo,
+        repos::list_repos,
         repos::trigger_ingest,
     ),
     components(
@@ -69,6 +70,8 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
             tenants::TransferOwnershipRequest,
             repos::ConnectRepoRequest,
             repos::ConnectRepoResponse,
+            repos::RepoItem,
+            repos::ConnectedReposResponse,
             repos::TriggerIngestResponse,
         )
     ),
@@ -88,7 +91,7 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
         (name = "tenants", description = "Tenant membership and role management"),
         (name = "api_keys", description = "API key management"),
         (name = "github", description = "GitHub App integration"),
-        (name = "repos", description = "Repository management"),
+        (name = "repos", description = "Connected repository management"),
     ),
 )]
 pub struct ApiDoc;

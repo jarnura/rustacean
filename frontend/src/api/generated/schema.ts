@@ -343,7 +343,13 @@ export interface paths {
             readonly path?: never;
             readonly cookie?: never;
         };
-        readonly get?: never;
+        /**
+         * List all connected repositories for the current session's tenant.
+         * @description Soft-deleted repos (`archived_at IS NOT NULL`) are excluded.
+         *     Results are ordered by `connected_at DESC` (most recently connected first).
+         *     Requires a verified session.
+         */
+        readonly get: operations["list_repos"];
         readonly put?: never;
         /**
          * Connect a GitHub repository to the calling user's active tenant.
@@ -514,6 +520,9 @@ export interface components {
             /** Format: uuid */
             readonly repo_id: string;
         };
+        readonly ConnectedReposResponse: {
+            readonly repos: readonly components["schemas"]["RepoItem"][];
+        };
         readonly CreateApiKeyRequest: {
             /** @description Human-readable label for the key. */
             readonly name: string;
@@ -615,6 +624,19 @@ export interface components {
             readonly user_id: string;
         };
         readonly ProbeResponse: {
+            readonly status: string;
+        };
+        readonly RepoItem: {
+            /** Format: date-time */
+            readonly connected_at: string;
+            /** Format: uuid */
+            readonly connected_by: string;
+            readonly default_branch: string;
+            readonly full_name: string;
+            /** Format: uuid */
+            readonly installation_id: string;
+            /** Format: uuid */
+            readonly repo_id: string;
             readonly status: string;
         };
         readonly RepoItemResponse: {
@@ -1290,6 +1312,40 @@ export interface operations {
             };
             /** @description Target tenant not found or inactive */
             readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly list_repos: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description List of connected repos */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["ConnectedReposResponse"];
+                };
+            };
+            /** @description Not authenticated or session expired */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email not verified */
+            readonly 403: {
                 headers: {
                     readonly [name: string]: unknown;
                 };

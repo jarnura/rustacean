@@ -5,3 +5,16 @@ include:
 
 # Rust service containers added per-wave as binaries are built.
 # Wave 4+: ingestion services, graph builder, embedding worker, API gateway.
+
+services:
+  pushgateway:
+    image: prom/pushgateway:v1.10.0
+    ports:
+      - "${PUSHGATEWAY_HOST_PORT:-9091}:9091"
+    networks:
+      - rb-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9091/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

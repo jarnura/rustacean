@@ -141,7 +141,7 @@ function ApiKeysPageInner({
         <p className="text-sm text-muted-foreground">
           Programmatic access to{" "}
           <span className="font-medium">{tenantName}</span>. Use the{" "}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">
+          <code className="rounded bg-muted px-1 py-0.5 text-xs text-foreground">
             Authorization: Bearer
           </code>{" "}
           header.

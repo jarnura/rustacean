@@ -46,10 +46,10 @@ impl EventStream {
     pub(crate) fn new(
         broadcaster: Arc<PerTenantBroadcaster>,
         tenant_id: &TenantId,
-        last_event_id: Option<EventId>,
+        last_event_id: Option<&EventId>,
         cfg: &SseConfig,
     ) -> Self {
-        let (rx, replay_vec) = broadcaster.subscribe_raw(tenant_id, last_event_id.as_ref());
+        let (rx, replay_vec) = broadcaster.subscribe_raw(tenant_id, last_event_id);
         let replay = VecDeque::from(replay_vec);
         let inner = build_inner_stream(replay, rx);
 
@@ -121,6 +121,8 @@ fn build_inner_stream(
     }
 
     let stream = futures::stream::unfold(State { replay, rx, done: false }, |mut s| async move {
+        use tokio::sync::broadcast::error::RecvError;
+
         if s.done {
             return None;
         }
@@ -131,7 +133,6 @@ fn build_inner_stream(
         }
 
         // Phase 2 — live
-        use tokio::sync::broadcast::error::RecvError;
         match s.rx.recv().await {
             Ok(env) => Some((Ok(env.to_axum_event()), s)),
 
@@ -163,7 +164,7 @@ mod tests {
 
     fn make_stream(
         tenant: &TenantId,
-        last_id: Option<EventId>,
+        last_id: Option<&EventId>,
     ) -> (Arc<PerTenantBroadcaster>, EventStream) {
         let cfg = SseConfig::default();
         let b = Arc::new(PerTenantBroadcaster::new(cfg.clone()));
@@ -174,7 +175,7 @@ mod tests {
     #[tokio::test]
     async fn stream_delivers_published_event() {
         let tenant = TenantId::new();
-        let (bus, mut stream) = make_stream(&tenant, None);
+        let (bus, mut stream) = make_stream(&tenant, None::<&EventId>);
 
         bus.publish(&tenant, "test", r#"{"n":1}"#.to_owned());
 

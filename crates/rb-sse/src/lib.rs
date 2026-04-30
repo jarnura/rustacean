@@ -64,7 +64,7 @@ impl EventBus {
     /// The returned [`EventStream`] implements both [`futures::Stream`] (for tests)
     /// and [`axum::response::IntoResponse`] (for handlers).
     #[must_use]
-    pub fn subscribe(&self, tenant: &TenantId, last_event_id: Option<EventId>) -> EventStream {
+    pub fn subscribe(&self, tenant: &TenantId, last_event_id: Option<&EventId>) -> EventStream {
         EventStream::new(Arc::clone(&self.0), tenant, last_event_id, &SseConfig::default())
     }
 
@@ -73,7 +73,7 @@ impl EventBus {
     pub fn subscribe_with_cfg(
         &self,
         tenant: &TenantId,
-        last_event_id: Option<EventId>,
+        last_event_id: Option<&EventId>,
         cfg: &SseConfig,
     ) -> EventStream {
         EventStream::new(Arc::clone(&self.0), tenant, last_event_id, cfg)
@@ -86,17 +86,20 @@ impl EventBus {
 
 /// Low-level test helpers that bypass the axum response layer.
 ///
-/// These are always compiled and exported so integration tests in `tests/`
-/// can access them without enabling a feature flag.
+/// Gated behind the `test-util` feature (REQ-MD-02) — not part of the default
+/// public surface.  Enable via `rb-sse = { …, features = ["test-util"] }` in
+/// `[dev-dependencies]`, or pass `--features test-util` to `cargo test`.
+#[cfg(any(test, feature = "test-util"))]
 pub mod testing {
     use std::sync::Arc;
 
     use tokio::sync::broadcast;
 
-    use super::*;
+    use super::{EventBus, EventId, SseEnvelope, TenantId};
 
     /// Subscribe to the raw broadcast channel and replay queue without the
     /// axum response wrapper.  Use this in unit tests to assert event content.
+    #[must_use]
     pub fn raw_subscribe(
         bus: &EventBus,
         tenant: &TenantId,

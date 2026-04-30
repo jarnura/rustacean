@@ -108,7 +108,7 @@ async fn replay_plus_live_stream_delivers_all_events() {
 
     // Subscribe with Last-Event-Id = ids[0] → replay [1, 2] + live [3].
     let cfg = SseConfig::default();
-    let mut stream = bus.subscribe_with_cfg(&tenant, Some(prior_ids[0].clone()), &cfg);
+    let mut stream = bus.subscribe_with_cfg(&tenant, Some(&prior_ids[0]), &cfg);
 
     // Publish one more live event.
     bus.publish_raw(&tenant, "ev", "3".to_owned());

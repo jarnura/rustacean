@@ -10,7 +10,7 @@
 #   RB_SMOKE_BASE_URL=http://localhost:3001 RB_SMOKE_TOKEN=<jwt> make ingest-smoke
 ingest-smoke:
 	@echo "==> ingest smoke: rb-sse unit tests"
-	cargo test -p rb-sse -- --nocapture
+	cargo test -p rb-sse --features test-util -- --nocapture
 	@echo "==> ingest smoke: test-producer binary compiles"
 	cargo build -p control-api --bin rb-test-producer --quiet
 	@echo "==> ingest smoke: PASS (SSE unit suite green; producer binary built)"

@@ -52,7 +52,7 @@ impl RingBuffer {
     }
 
     /// Returns a snapshot of the current ring contents (for tests / initial sync).
-    #[cfg(any(test, feature = "test-util"))]
+    #[cfg(test)]
     pub(crate) fn snapshot(&mut self) -> Vec<Arc<SseEnvelope>> {
         self.evict_expired();
         self.buf.iter().map(Arc::clone).collect()
@@ -91,6 +91,7 @@ pub struct PerTenantBroadcaster {
 }
 
 impl PerTenantBroadcaster {
+    #[must_use]
     pub fn new(cfg: SseConfig) -> Self {
         Self {
             states: DashMap::new(),
@@ -133,6 +134,7 @@ impl PerTenantBroadcaster {
 
     /// Subscribe to live events for `tenant_id`, optionally replaying from
     /// `last_event_id` (ring buffer lookup; `None` if ID not found or absent).
+    #[must_use]
     pub fn subscribe_raw(
         &self,
         tenant_id: &TenantId,

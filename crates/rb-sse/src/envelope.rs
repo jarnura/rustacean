@@ -13,7 +13,7 @@ pub struct EventId(pub(crate) String);
 impl EventId {
     #[must_use]
     pub fn new() -> Self {
-        let ts = Utc::now().timestamp_millis() as u64;
+        let ts = u64::try_from(Utc::now().timestamp_millis()).unwrap_or(0);
         let rand = Uuid::new_v4().simple();
         Self(format!("{ts:016x}{rand}"))
     }

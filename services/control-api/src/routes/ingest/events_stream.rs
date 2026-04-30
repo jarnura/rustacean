@@ -45,5 +45,5 @@ pub async fn events_stream(
         .filter(|s| !s.is_empty())
         .map(|s| EventId::from(s.to_owned()));
 
-    Ok(state.sse_bus.subscribe(&tenant_id, last_event_id))
+    Ok(state.sse_bus.subscribe(&tenant_id, last_event_id.as_ref()))
 }

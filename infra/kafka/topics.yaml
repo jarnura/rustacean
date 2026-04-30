@@ -1,4 +1,5 @@
 topics:
+  # ── Base command topics (8) ───────────────────────────────────────────────
   - name: rb.ingest.clone.commands
     partitions: 6
     replication_factor: 1
@@ -46,3 +47,87 @@ topics:
     replication_factor: 1
     config:
       retention.ms: "7776000000"  # 90 days
+
+  # ── Retry topics — one per pipeline stage (6) ────────────────────────────
+  # Consumers skip messages whose x-rb-process-after-ms > now(); exponential
+  # backoff of 30s/2m/10m encoded in that header by rb-kafka RetryPolicy.
+  - name: rb.ingest.clone.commands.retry
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"  # 7 days
+
+  - name: rb.ingest.expand.commands.retry
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"
+
+  - name: rb.ingest.parse.commands.retry
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"
+
+  - name: rb.ingest.typecheck.commands.retry
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"
+
+  - name: rb.ingest.graph.commands.retry
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"
+
+  - name: rb.ingest.embed.commands.retry
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"
+
+  # ── DLQ topics — one per pipeline stage + projector (7) ─────────────────
+  # Terminal failures land here after max_attempts (3). No consumers in Wave 4;
+  # hand-replay tool added in Wave 7 (migrate kafka --dlq-replay <topic>).
+  - name: rb.ingest.clone.commands.dlq
+    partitions: 3
+    replication_factor: 1
+    config:
+      retention.ms: "2592000000"  # 30 days
+
+  - name: rb.ingest.expand.commands.dlq
+    partitions: 3
+    replication_factor: 1
+    config:
+      retention.ms: "2592000000"
+
+  - name: rb.ingest.parse.commands.dlq
+    partitions: 3
+    replication_factor: 1
+    config:
+      retention.ms: "2592000000"
+
+  - name: rb.ingest.typecheck.commands.dlq
+    partitions: 3
+    replication_factor: 1
+    config:
+      retention.ms: "2592000000"
+
+  - name: rb.ingest.graph.commands.dlq
+    partitions: 3
+    replication_factor: 1
+    config:
+      retention.ms: "2592000000"
+
+  - name: rb.ingest.embed.commands.dlq
+    partitions: 3
+    replication_factor: 1
+    config:
+      retention.ms: "2592000000"
+
+  - name: rb.projector.events.dlq
+    partitions: 3
+    replication_factor: 1
+    config:
+      retention.ms: "2592000000"  # 30 days

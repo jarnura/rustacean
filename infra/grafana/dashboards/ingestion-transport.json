@@ -1,0 +1,292 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "description": "rust-brain Wave 4 — Ingestion Transport (Kafka produce/consume, DLQ, blob store, SSE)",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["rust-brain", "ingestion", "kafka"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Ingestion Transport",
+  "uid": "rb-ingestion-transport",
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Kafka — Produce",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Produce rate (msg/s)",
+      "description": "rb_kafka_messages_total{op=\"produce\"} — rate per topic",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0 },
+        "overrides": []
+      },
+      "options": { "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "expr": "sum by (topic) (rate(rb_kafka_messages_total{op=\"produce\",outcome=\"ok\"}[1m]))",
+          "legendFormat": "{{topic}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Produce error rate (msg/s)",
+      "description": "rb_kafka_messages_total{op=\"produce\",outcome=\"err\"} — non-zero means broker issue",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0, "color": { "fixedColor": "red", "mode": "fixed" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (topic) (rate(rb_kafka_messages_total{op=\"produce\",outcome=\"err\"}[1m]))",
+          "legendFormat": "{{topic}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "row",
+      "title": "Kafka — Consume & Lag",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Consume rate (msg/s)",
+      "description": "rb_kafka_messages_total{op=\"consume\"} — rate per topic",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (topic) (rate(rb_kafka_messages_total{op=\"consume\",outcome=\"ok\"}[1m]))",
+          "legendFormat": "{{topic}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Consumer lag (records)",
+      "description": "rb_kafka_consumer_lag_records{topic, partition, group} — should stay near 0",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (topic, group) (rb_kafka_consumer_lag_records)",
+          "legendFormat": "{{topic}} / {{group}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "E2E latency p99 (seconds)",
+      "description": "rb_kafka_e2e_latency_seconds histogram — produce-to-consume wall time",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (topic, le) (rate(rb_kafka_e2e_latency_seconds_bucket[5m])))",
+          "legendFormat": "p99 {{topic}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Consume lag latency p99 (seconds)",
+      "description": "rb_kafka_consume_lag_seconds — time from message produce to consume start",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "fieldConfig": {
+        "defaults": { "unit": "s", "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (topic, le) (rate(rb_kafka_consume_lag_seconds_bucket[5m])))",
+          "legendFormat": "p99 {{topic}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "DLQ & Retry",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "DLQ rate (msg/min)",
+      "description": "rb_kafka_dlq_total — non-zero is a page-worthy event (ADR-006 §12)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0, "color": { "fixedColor": "red", "mode": "fixed" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (topic, reason) (rate(rb_kafka_dlq_total[1m])) * 60",
+          "legendFormat": "{{topic}} / {{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Retry rate by attempt",
+      "description": "rb_kafka_retry_total{topic, attempt}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (topic, attempt) (rate(rb_kafka_retry_total[1m])) * 60",
+          "legendFormat": "{{topic}} attempt={{attempt}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "row",
+      "title": "SSE",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "SSE clients (active)",
+      "description": "rb_sse_clients{tenant} — live SSE subscriptions",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 36 },
+      "fieldConfig": {
+        "defaults": { "unit": "short" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum(rb_sse_clients)",
+          "legendFormat": "clients",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "SSE events dispatched (msg/s)",
+      "description": "rb_sse_events_dispatched_total{tenant}",
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 36 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (tenant) (rate(rb_sse_events_dispatched_total[1m]))",
+          "legendFormat": "{{tenant}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "SSE dropped events (msg/s)",
+      "description": "rb_sse_dropped_total{reason} — slow clients / buffer overflow",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 36 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0, "color": { "fixedColor": "orange", "mode": "fixed" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (reason) (rate(rb_sse_dropped_total[1m]))",
+          "legendFormat": "{{reason}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "row",
+      "title": "Blob Store",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 44 }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Blob ops (ops/s)",
+      "description": "rb_blob_op_total{op, store, outcome}",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 45 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (op, store) (rate(rb_blob_op_total{outcome=\"ok\"}[1m]))",
+          "legendFormat": "{{op}} / {{store}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Blob bytes (bytes/s)",
+      "description": "rb_blob_bytes_total{op, store}",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 45 },
+      "fieldConfig": {
+        "defaults": { "unit": "Bps", "min": 0 },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (op, store) (rate(rb_blob_bytes_total[1m]))",
+          "legendFormat": "{{op}} / {{store}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

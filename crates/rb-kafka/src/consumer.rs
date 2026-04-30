@@ -22,6 +22,7 @@ pub struct Consumer<E: ProstMessage + Default> {
     _phantom: PhantomData<E>,
 }
 
+#[allow(clippy::used_underscore_binding, clippy::unused_async)]
 impl<E: ProstMessage + Default> Consumer<E> {
     pub fn new(cfg: &ConsumerCfg) -> Result<Self, KafkaError> {
         let consumer: StreamConsumer = ClientConfig::new()

@@ -1,12 +1,17 @@
-pub mod config;
-pub mod consumer;
-pub mod dlq;
-pub mod envelope;
-pub mod errors;
-pub mod headers;
-pub mod producer;
-pub mod retry;
-pub mod testing;
+#![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
+
+mod config;
+mod consumer;
+mod dlq;
+mod envelope;
+mod errors;
+mod headers;
+mod producer;
+mod retry;
+mod testing_impl;
+pub mod testing {
+    pub use super::testing_impl::{InProcessBus, RawMessage, TestConsumer, TestProducer};
+}
 
 pub use config::{ConsumerCfg, ProducerCfg};
 pub use consumer::Consumer;

@@ -61,6 +61,7 @@ impl InProcessBus {
     }
 
     /// Subscribe to a topic; returns a receiver for all messages published after this call.
+    #[must_use]
     pub fn subscribe(&self, topic: &str) -> broadcast::Receiver<RawMessage> {
         self.sender_for(topic).subscribe()
     }
@@ -73,6 +74,7 @@ impl InProcessBus {
     }
 
     /// Create a typed producer backed by this bus.
+    #[must_use]
     pub fn producer<E: ProstMessage>(&self) -> TestProducer<E> {
         TestProducer {
             bus: Arc::new(self.clone()),
@@ -82,6 +84,7 @@ impl InProcessBus {
     }
 
     /// Create a typed consumer subscribed to `topic`.
+    #[must_use]
     pub fn consumer<E: ProstMessage + Default>(&self, topic: &str) -> TestConsumer<E> {
         let receiver = self.subscribe(topic);
         TestConsumer {
@@ -111,6 +114,7 @@ pub struct TestProducer<E: ProstMessage> {
     _phantom: PhantomData<E>,
 }
 
+#[allow(clippy::unused_async)]
 impl<E: ProstMessage> TestProducer<E> {
     pub async fn publish(
         &self,
@@ -150,6 +154,7 @@ pub struct TestConsumer<E: ProstMessage + Default> {
     _phantom: PhantomData<E>,
 }
 
+#[allow(clippy::unused_async)]
 impl<E: ProstMessage + Default> TestConsumer<E> {
     pub async fn next(&self) -> Option<Result<EventEnvelope<E>, KafkaError>> {
         let mut rx = self.receiver.lock().await;
@@ -199,6 +204,7 @@ impl<E: ProstMessage + Default> TestConsumer<E> {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+#[allow(clippy::used_underscore_binding)]
 fn envelope_to_headers<E: ProstMessage>(env: &EventEnvelope<E>) -> Vec<(String, String)> {
     let mut h = vec![
         (HEADER_TENANT_ID.to_owned(), env.tenant_id.to_string()),

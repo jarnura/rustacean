@@ -64,6 +64,7 @@ impl<E: ProstMessage> Producer<E> {
     }
 }
 
+#[allow(clippy::used_underscore_binding)]
 fn build_headers<E: ProstMessage>(envelope: &EventEnvelope<E>) -> OwnedHeaders {
     let tenant_str = envelope.tenant_id.to_string();
     let event_id_str = envelope.event_id.to_string();
@@ -153,6 +154,7 @@ pub fn decode_envelope<E: ProstMessage + Default>(
 
     // Check process_after gate for retry backoff.
     if let Some(due_ms) = get(HEADER_PROCESS_AFTER_MS).and_then(|s| s.parse::<u64>().ok()) {
+        #[allow(clippy::cast_possible_truncation)]
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()

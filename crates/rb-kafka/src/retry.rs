@@ -40,6 +40,7 @@ impl RetryPolicy {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default();
+        #[allow(clippy::cast_possible_truncation)]
         Some((now + delay).as_millis() as u64)
     }
 

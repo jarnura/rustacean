@@ -1,4 +1,4 @@
-use rb_kafka::{dlq::dlq_topic, testing::InProcessBus, EventEnvelope};
+use rb_kafka::{dlq_topic, testing::InProcessBus, EventEnvelope};
 use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
 
 fn poison_event(tenant_id: TenantId) -> EventEnvelope<IngestStatusEvent> {

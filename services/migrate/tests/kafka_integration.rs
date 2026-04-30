@@ -41,7 +41,7 @@ fn make_topics_yaml(topics: &[(&str, i32, &str)]) -> NamedTempFile {
 // ── unit tests (no broker required) ─────────────────────────────────────────
 
 #[test]
-fn test_load_all_8_topics_from_infra_yaml() {
+fn test_load_all_21_topics_from_infra_yaml() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -52,9 +52,15 @@ fn test_load_all_8_topics_from_infra_yaml() {
         .join("topics.yaml");
 
     let tf = load_topics_file(&path).expect("infra/kafka/topics.yaml must be loadable");
-    assert_eq!(tf.topics.len(), 8, "expected 8 topic definitions");
+    assert_eq!(
+        tf.topics.len(),
+        21,
+        "expected 21 topic definitions (8 base + 6 retry + 7 DLQ per ADR-006 §4.3)"
+    );
 
     let names: Vec<&str> = tf.topics.iter().map(|t| t.name.as_str()).collect();
+
+    // Base topics
     assert!(names.contains(&"rb.ingest.clone.commands"));
     assert!(names.contains(&"rb.ingest.expand.commands"));
     assert!(names.contains(&"rb.ingest.parse.commands"));
@@ -63,6 +69,16 @@ fn test_load_all_8_topics_from_infra_yaml() {
     assert!(names.contains(&"rb.ingest.embed.commands"));
     assert!(names.contains(&"rb.projector.events"));
     assert!(names.contains(&"rb.audit.events"));
+
+    // Retry topics (one per pipeline stage)
+    assert!(names.contains(&"rb.ingest.clone.commands.retry"));
+    assert!(names.contains(&"rb.ingest.parse.commands.retry"));
+    assert!(names.contains(&"rb.ingest.embed.commands.retry"));
+
+    // DLQ topics (one per pipeline stage + projector)
+    assert!(names.contains(&"rb.ingest.clone.commands.dlq"));
+    assert!(names.contains(&"rb.ingest.parse.commands.dlq"));
+    assert!(names.contains(&"rb.projector.events.dlq"));
 }
 
 #[test]

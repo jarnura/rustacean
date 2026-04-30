@@ -76,6 +76,7 @@ async fn trace_ids_are_distinct_across_messages() {
     ];
 
     for (i, tc) in contexts.into_iter().enumerate() {
+        #[allow(clippy::cast_possible_truncation)]
         let env = make_event(tenant_id, i as u32).with_trace_context(tc);
         producer.publish("test.multi_trace", &[], env).await.unwrap();
     }

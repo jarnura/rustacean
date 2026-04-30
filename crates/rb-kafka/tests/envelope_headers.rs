@@ -1,8 +1,4 @@
-use rb_kafka::{
-    envelope::{SchemaVersion, TraceContext},
-    testing::InProcessBus,
-    EventEnvelope,
-};
+use rb_kafka::{testing::InProcessBus, EventEnvelope, SchemaVersion, TraceContext};
 use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
 
 fn make_status_event(tenant_id: TenantId) -> IngestStatusEvent {
@@ -62,7 +58,7 @@ async fn envelope_round_trip_with_blob_ref() {
     let consumer = bus.consumer::<IngestStatusEvent>("test.blob.envelope");
 
     let tenant_id = TenantId::new();
-    let blob_uri = format!("rb-blob://tenant_{}/abcdef1234567890abcdef", tenant_id);
+    let blob_uri = format!("rb-blob://tenant_{tenant_id}/abcdef1234567890abcdef");
     let env = EventEnvelope::new(tenant_id, make_status_event(tenant_id))
         .with_blob_ref(blob_uri.clone());
 

@@ -25,6 +25,20 @@ impl TenantId {
     }
 }
 
+impl From<Uuid> for TenantId {
+    fn from(uuid: Uuid) -> Self {
+        Self(uuid)
+    }
+}
+
+impl std::str::FromStr for TenantId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.parse::<Uuid>()?))
+    }
+}
+
 impl Default for TenantId {
     fn default() -> Self {
         Self::new()

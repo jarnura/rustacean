@@ -1,0 +1,105 @@
+groups:
+  - name: ingestion-transport
+    interval: 60s
+    rules:
+
+      # ── DLQ ──────────────────────────────────────────────────────────────────
+      - alert: KafkaDlqNonZero
+        expr: |
+          sum by (topic, reason) (
+            rate(rb_kafka_dlq_total[5m])
+          ) > 0
+        for: 5m
+        labels:
+          severity: page
+          component: kafka
+        annotations:
+          summary: "DLQ receiving messages on {{ $labels.topic }}"
+          description: >
+            rb_kafka_dlq_total{topic="{{ $labels.topic }}", reason="{{ $labels.reason }}"}
+            has been non-zero for 5 minutes. Investigate dead-letter queue.
+
+      # ── Consumer lag ─────────────────────────────────────────────────────────
+      - alert: KafkaConsumerLagHigh
+        expr: |
+          sum by (topic, group) (rb_kafka_consumer_lag_records) > 1000
+        for: 5m
+        labels:
+          severity: warn
+          component: kafka
+        annotations:
+          summary: "Consumer lag > 1000 records on {{ $labels.topic }} / {{ $labels.group }}"
+          description: >
+            Consumer group {{ $labels.group }} is lagging on topic {{ $labels.topic }}.
+            Possible causes: consumer crashed, slow handler, or produce spike.
+
+      - alert: KafkaConsumerLagSecondsCritical
+        expr: |
+          histogram_quantile(0.99,
+            sum by (topic, le) (rate(rb_kafka_consume_lag_seconds_bucket[5m]))
+          ) > 60
+        for: 5m
+        labels:
+          severity: page
+          component: kafka
+        annotations:
+          summary: "p99 consume lag > 60s on {{ $labels.topic }}"
+          description: >
+            Messages on {{ $labels.topic }} are sitting in the queue for over 60 seconds
+            (p99) before being consumed. Check consumer health and throughput.
+
+      # ── Produce errors ────────────────────────────────────────────────────────
+      - alert: KafkaProduceErrorRate
+        expr: |
+          sum by (topic) (
+            rate(rb_kafka_messages_total{op="produce",outcome="err"}[5m])
+          )
+          /
+          (
+            sum by (topic) (rate(rb_kafka_messages_total{op="produce"}[5m])) + 0.001
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: page
+          component: kafka
+        annotations:
+          summary: "Produce error rate > 1% on {{ $labels.topic }}"
+          description: >
+            More than 1% of produce attempts to {{ $labels.topic }} are failing.
+            Check broker connectivity and topic configuration.
+
+      # ── SSE drops ────────────────────────────────────────────────────────────
+      - alert: SseDropRateHigh
+        expr: |
+          sum by (reason) (rate(rb_sse_dropped_total[5m]))
+          /
+          (sum(rate(rb_sse_events_dispatched_total[5m])) + 0.001) > 0.01
+        for: 5m
+        labels:
+          severity: warn
+          component: sse
+        annotations:
+          summary: "SSE drop rate > 1% (reason: {{ $labels.reason }})"
+          description: >
+            More than 1% of SSE events are being dropped due to {{ $labels.reason }}.
+            Likely slow clients or per-tenant broadcast buffer overflow.
+
+      # ── Blob store errors ─────────────────────────────────────────────────────
+      - alert: BlobStoreErrorRate
+        expr: |
+          sum by (op, store) (
+            rate(rb_blob_op_total{outcome="err"}[5m])
+          )
+          /
+          (
+            sum by (op, store) (rate(rb_blob_op_total[5m])) + 0.001
+          ) > 0.01
+        for: 5m
+        labels:
+          severity: page
+          component: blob
+        annotations:
+          summary: "Blob store error rate > 1% for {{ $labels.op }} on {{ $labels.store }}"
+          description: >
+            {{ $labels.op }} operations on {{ $labels.store }} blob store are failing
+            at more than 1%. Check filesystem/S3 availability and permissions.

@@ -10,6 +10,7 @@ members = [
     "crates/rb-auth",
     "crates/rb-github",
     "crates/rb-blob",
+    "crates/rb-kafka",
     "services/migrate",
     "services/control-api",
 ]
@@ -25,6 +26,7 @@ authors = ["Jarnura <jarnura47@gmail.com>"]
 [workspace.dependencies]
 # Async
 tokio = { version = "1", features = ["full"] }
+futures = "0.3"
 # Tracing
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }

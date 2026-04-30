@@ -10,6 +10,10 @@
 # Environment:
 #   COMPOSE_CMD      Full docker compose invocation (default: "docker compose -f <repo>/compose/dev.yml")
 #                    Mars example: "docker compose --env-file compose/tailscale.env -f compose/dev.yml -f compose/tailscale.yml"
+#   COMPOSE_ENV_FILE Path to a docker compose env-file to source into the shell before health checks.
+#                    Required on mars so CONTROL_API_HOST_PORT/FRONTEND_HOST_PORT resolve to the
+#                    remapped ports (e.g. 18080/15173) rather than the dev defaults (8080/15173).
+#                    Example: "/opt/rustbrain/compose/tailscale.env"
 #   RB_REPO_PATH     Repo root path (default: parent of this script)
 #   GITHUB_TOKEN     If set, posts a commit status to GitHub for NEW_SHA
 #   GITHUB_REPO      Required with GITHUB_TOKEN (e.g. "jarnura/rustacean")
@@ -25,6 +29,16 @@ REPO_ROOT="${RB_REPO_PATH:-"$(cd "$SCRIPT_DIR/.." && pwd)"}"
 LOG_DIR="${RB_LOG_DIR:-"$HOME/.local/state/rustbrain"}"
 LOG_FILE="$LOG_DIR/dev-stack-rebuilds.ndjson"
 BYPASS_FILE="$REPO_ROOT/compose/.no-auto-rebuild"
+
+# Source the compose env-file into the shell so host-port overrides
+# (e.g. CONTROL_API_HOST_PORT=18080 on mars) are visible during health checks.
+# docker compose's --env-file flag only passes vars to containers, not to this shell.
+if [[ -n "${COMPOSE_ENV_FILE:-}" && -f "$COMPOSE_ENV_FILE" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$COMPOSE_ENV_FILE"
+  set +a
+fi
 
 # -- Helpers -----------------------------------------------------------------
 

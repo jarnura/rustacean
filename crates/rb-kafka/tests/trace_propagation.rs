@@ -136,6 +136,41 @@ async fn malformed_traceparent_is_dlqd_and_returns_error() {
     );
 }
 
+// Regression: span.enter() and ContextGuard held across .await were unsound on a
+// multi-thread runtime. tokio::spawn forces the Send bound at compile time — this
+// test catches any !Send type inadvertently held across an .await in publish/consume.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn produce_and_consume_futures_are_send_on_multi_thread_runtime() {
+    let bus = InProcessBus::new();
+    let producer = bus.producer::<IngestStatusEvent>();
+    let consumer = bus.consumer::<IngestStatusEvent>("test.send_check");
+
+    let tenant_id = TenantId::new();
+    let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_owned();
+    let env = make_event(tenant_id, 0).with_trace_context(TraceContext {
+        traceparent: traceparent.clone(),
+        tracestate: String::new(),
+    });
+
+    tokio::spawn(async move {
+        producer.publish("test.send_check", &[], env).await.unwrap();
+    })
+    .await
+    .unwrap();
+
+    let received = tokio::spawn(async move { consumer.next().await })
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        received.trace_context.unwrap().traceparent,
+        traceparent,
+        "trace context must survive produce→consume when futures are Send on multi-thread runtime"
+    );
+}
+
 #[tokio::test]
 async fn valid_message_after_malformed_is_processed_normally() {
     let bus = InProcessBus::new();

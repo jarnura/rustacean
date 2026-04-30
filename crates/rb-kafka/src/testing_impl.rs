@@ -203,14 +203,19 @@ impl<E: ProstMessage + Default> TestConsumer<E> {
             Ok(msg) => {
                 let topic = msg.topic.clone();
 
-                // Seed consume span (no-op when no OTel propagator is installed in tests).
-                let _cx_guard = {
+                // _cx_guard scoped to decode only: the guard must not be held across
+                // any .await point (nack_to_dlq below). OTel context is a no-op in
+                // tests without a propagator, so scoping to the sync call is safe.
+                let result = {
                     let extractor = KafkaHeaderExtractor(&msg.headers);
-                    opentelemetry::global::get_text_map_propagator(|prop| prop.extract(&extractor))
-                        .attach()
+                    let _cx_guard =
+                        opentelemetry::global::get_text_map_propagator(|prop| {
+                            prop.extract(&extractor)
+                        })
+                        .attach();
+                    decode_envelope(&msg.payload, &msg.headers, &msg.topic, 0, 0)
+                    // _cx_guard dropped here
                 };
-
-                let result = decode_envelope(&msg.payload, &msg.headers, &msg.topic, 0, 0);
 
                 // Malformed traceparent: auto-DLQ and return error, matching Consumer::next().
                 // trace_context is cleared before nack so the DLQ record doesn't

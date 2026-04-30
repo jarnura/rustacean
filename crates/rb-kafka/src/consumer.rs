@@ -96,24 +96,52 @@ impl<E: ProstMessage + Default> Consumer<E> {
                     .set(lag);
                 }
 
-                // Seed consume span as child of producer span via W3C context extraction.
-                // The attached context is current for the remainder of this call so that
-                // any instrumented sub-spans are linked to the upstream trace.
-                let _cx_guard = {
+                // Build consume span as child of the upstream producer trace.
+                // _cx_guard is scoped to span construction: the span captures the parent
+                // relationship at creation time; both _cx_guard and key_str are dropped
+                // before any .await point.
+                let consume_span = {
                     let extractor = KafkaHeaderExtractor(&headers);
-                    opentelemetry::global::get_text_map_propagator(|prop| prop.extract(&extractor))
-                        .attach()
+                    let _cx_guard =
+                        opentelemetry::global::get_text_map_propagator(|prop| {
+                            prop.extract(&extractor)
+                        })
+                        .attach();
+                    let key_str = m
+                        .key()
+                        .map(|k| String::from_utf8_lossy(k).into_owned())
+                        .unwrap_or_default();
+                    tracing::info_span!(
+                        "kafka.consume",
+                        "otel.kind" = "CONSUMER",
+                        "messaging.system" = "kafka",
+                        "messaging.destination" = %topic,
+                        "messaging.kafka.partition" = partition,
+                        "messaging.kafka.offset" = offset,
+                        "messaging.kafka.message_key" = %key_str,
+                        "rb.tenant_id" = tracing::field::Empty,
+                        "rb.event_id" = tracing::field::Empty,
+                        "rb.schema_version" = tracing::field::Empty,
+                        "rb.attempt" = tracing::field::Empty,
+                    )
+                    // key_str and _cx_guard dropped here
                 };
-                let consume_span = tracing::info_span!(
-                    "kafka.consume",
-                    "otel.kind" = "CONSUMER",
-                    topic = %topic,
-                    partition,
-                    offset,
-                );
-                let _enter = consume_span.enter();
+                // Scoped entry: span active only for the synchronous decode; guard
+                // drops at block exit so it is never held across an .await point.
+                let result = {
+                    let _enter = consume_span.enter();
+                    decode_envelope(payload, &headers, &topic, partition, offset)
+                };
 
-                let result = decode_envelope(payload, &headers, &topic, partition, offset);
+                // Record §9.3 attributes immediately after decode so all exit paths,
+                // including the malformed-traceparent early return, carry envelope
+                // attributes on the span.  span.record() works without the span entered.
+                if let Ok(ref env) = result {
+                    consume_span.record("rb.tenant_id", env.tenant_id.to_string().as_str());
+                    consume_span.record("rb.event_id", env.event_id.to_string().as_str());
+                    consume_span.record("rb.schema_version", env.schema_version.as_str());
+                    consume_span.record("rb.attempt", env._meta.attempt);
+                }
 
                 // Malformed traceparent: DLQ immediately and surface the error.
                 // trace_context is cleared before nack so the DLQ record doesn't

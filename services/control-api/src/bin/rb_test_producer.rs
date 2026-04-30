@@ -8,7 +8,7 @@
 /// Used by `make ingest-smoke`.
 use anyhow::{Context as _, Result};
 use clap::Parser;
-use rb_kafka::{EventEnvelope, Producer, ProducerCfg, SchemaVersion};
+use rb_kafka::{EnvelopeMeta, EventEnvelope, Producer, ProducerCfg, SchemaVersion};
 use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
 use uuid::Uuid;
 
@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
             blob_ref: None,
             created_at: chrono::Utc::now(),
             payload,
-            _meta: Default::default(),
+            _meta: EnvelopeMeta::default(),
         };
 
         let key = cli.tenant_id.as_bytes().to_vec();

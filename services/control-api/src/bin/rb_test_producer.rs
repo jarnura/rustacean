@@ -35,6 +35,10 @@ struct Cli {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Initialise OTel so kafka.produce spans are exported to Tempo.
+    // Falls back gracefully when OTEL_EXPORTER_OTLP_ENDPOINT is unset or unreachable.
+    let _tracing_guard = rb_tracing::init("rb-smoke-producer").ok();
+
     let cfg = ProducerCfg::default();
     let producer =
         Producer::<IngestStatusEvent>::new(&cfg).context("failed to create Kafka producer")?;
@@ -55,6 +59,9 @@ async fn main() -> Result<()> {
             tenant_id,
             event_id,
             schema_version: SchemaVersion::V1,
+            // No explicit trace_context: producer.publish() injects the active OTel span
+            // (the kafka.produce span it creates internally) so kafka.consume and
+            // sse.publish share the same trace id.
             trace_context: None,
             blob_ref: None,
             created_at: chrono::Utc::now(),

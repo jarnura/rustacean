@@ -1,35 +1,38 @@
-.PHONY: review-ready blob-smoke blob-smoke-s3 ingest-smoke
+.PHONY: review-ready blob-smoke blob-smoke-s3 ingest-smoke ingest-smoke-offline
 
 # Run all local pre-PR checks: fmt, clippy, test, deny, openapi, frontend (if changed).
 # All steps run even on partial failure so you see the full picture before pushing.
 review-ready:
 	bash scripts/review-ready.sh
 
-
-# Run SSE ingest smoke tests (no Kafka required — uses dev test-publish route).
+# Run the full tracer-bullet ingest smoke (ADR-006 §17 exit gate).
 #
-# Requires a running control-api with RB_DEV_TEST_ROUTES=1 and a valid session
-# cookie or bearer token in RB_SMOKE_TOKEN.  Defaults target localhost:3000.
+# Requires compose/full.yml to be running (Kafka + OTel collector + Tempo):
+#   docker compose -f compose/full.yml up -d
+#   cargo build --workspace
+#
+# Produces one synthetic IngestStatusEvent to rb.projector.events, then prints
+# the curl and Tempo verification commands.
+#
+# Env overrides (see scripts/ingest-smoke.sh for full list):
+#   TENANT_ID                — target tenant UUID
+#   KAFKA_BOOTSTRAP_SERVERS  — Kafka bootstrap (default: localhost:9094)
 #
 # Usage:
 #   make ingest-smoke
-#   RB_SMOKE_BASE_URL=http://localhost:3001 RB_SMOKE_TOKEN=<jwt> make ingest-smoke
-ingest-smoke:
+#   TENANT_ID=<uuid> make ingest-smoke
+ingest-smoke: ingest-smoke-offline
+	@echo "==> ingest smoke: invoking Kafka smoke harness"
+	bash scripts/ingest-smoke.sh
+
+# Offline gate: run rb-sse unit tests and verify the producer binary compiles.
+# No Kafka or compose stack required.
+ingest-smoke-offline:
 	@echo "==> ingest smoke: rb-sse unit tests"
 	cargo test -p rb-sse --features test-util -- --nocapture
 	@echo "==> ingest smoke: test-producer binary compiles"
 	cargo build -p control-api --bin rb-test-producer --quiet
-	@echo "==> ingest smoke: PASS (SSE unit suite green; producer binary built)"
-	@echo ""
-	@echo "    To exercise the full SSE end-to-end path against a live server:"
-	@echo "      1. Start control-api: RB_DEV_TEST_ROUTES=1 cargo run -p control-api"
-	@echo "      2. Open an SSE stream: curl -N -H 'Authorization: Bearer \$$RB_SMOKE_TOKEN' \\"
-	@echo "           \$${RB_SMOKE_BASE_URL:-http://localhost:3000}/v1/ingest/events"
-	@echo "      3. Publish a test event: curl -X POST \\"
-	@echo "           -H 'Authorization: Bearer \$$RB_SMOKE_TOKEN' \\"
-	@echo "           -H 'Content-Type: application/json' \\"
-	@echo "           -d '{\"event\":\"ingest.status\",\"data\":{\"status\":\"processing\"}}' \\"
-	@echo "           \$${RB_SMOKE_BASE_URL:-http://localhost:3000}/v1/ingest/test-publish"
+	@echo "==> ingest smoke offline: PASS"
 
 # Run filesystem blob store smoke tests (no external deps required).
 blob-smoke:

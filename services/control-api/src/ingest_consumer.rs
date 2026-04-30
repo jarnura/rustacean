@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use rb_kafka::{Consumer, ConsumerCfg};
+use rb_kafka::{Consumer, ConsumerCfg, TraceContext};
 use rb_schemas::{IngestStatus, IngestStatusEvent};
 use rb_sse::EventBus;
 use serde::Serialize;
@@ -41,6 +41,62 @@ fn status_label(s: IngestStatus) -> &'static str {
     }
 }
 
+/// `OTel` [`Extractor`] over a borrowed `&[(String, String)]` header list.
+/// Scoped to this module — mirrors `KafkaHeaderExtractor` from `rb-kafka` without
+/// requiring it to be re-exported.
+///
+/// [`Extractor`]: opentelemetry::propagation::Extractor
+struct HeaderExtractor<'a>(&'a [(String, String)]);
+
+impl opentelemetry::propagation::Extractor for HeaderExtractor<'_> {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(key))
+            .map(|(_, v)| v.as_str())
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        self.0.iter().map(|(k, _)| k.as_str()).collect()
+    }
+}
+
+/// Build a `sse.publish` span that is a child of the upstream producer's trace.
+///
+/// We re-extract the W3C trace context from the envelope so the span shares the
+/// same trace id as `kafka.produce` and `kafka.consume`.  If no trace context is
+/// present the span is still emitted but without a remote parent.
+///
+/// The guard returned by `attach()` is intentionally scoped to this helper —
+/// it is dropped before any `.await` point in the caller (ADR-006 §9.3).
+fn sse_publish_span(
+    tenant_id: &rb_schemas::TenantId,
+    tc: Option<&TraceContext>,
+) -> tracing::Span {
+    // Scope the context guard to span construction only.
+    // The guard is dropped when this block exits; the parent relationship is
+    // already captured inside the Span at creation time.
+    let _cx_guard = tc.map(|tc| {
+        let headers: Vec<(String, String)> = vec![
+            ("traceparent".to_owned(), tc.traceparent.clone()),
+            ("tracestate".to_owned(), tc.tracestate.clone()),
+        ];
+        opentelemetry::global::get_text_map_propagator(|prop| {
+            prop.extract(&HeaderExtractor(&headers))
+        })
+        .attach()
+    });
+
+    tracing::info_span!(
+        "sse.publish",
+        "otel.kind" = "PRODUCER",
+        "messaging.system" = "sse",
+        "messaging.destination" = "ingest.events",
+        "rb.tenant_id" = %tenant_id,
+    )
+    // _cx_guard dropped here — parent relationship already captured
+}
+
 /// Spawn the long-running Kafka consumer task that subscribes to
 /// `rb.projector.events` and fans events out through the SSE bus.
 ///
@@ -75,7 +131,15 @@ pub fn spawn(
                     let json_ev = IngestStatusEventJson::from(&envelope.payload);
 
                     match serde_json::to_string(&json_ev) {
-                        Ok(data) => sse_bus.publish_raw(&tenant_id, "ingest.status", data),
+                        Ok(data) => {
+                            // Build a sse.publish span in the same OTel trace as the producer.
+                            // in_scope ensures the entry guard never crosses an .await boundary.
+                            let span =
+                                sse_publish_span(&tenant_id, envelope.trace_context.as_ref());
+                            span.in_scope(|| {
+                                sse_bus.publish_raw(&tenant_id, "ingest.status", data);
+                            });
+                        }
                         Err(e) => {
                             tracing::error!("ingest_consumer: serialise error: {e}");
                         }

@@ -1,4 +1,4 @@
-use rb_kafka::{testing::InProcessBus, EventEnvelope, SchemaVersion, TraceContext};
+use rb_kafka::{EventEnvelope, SchemaVersion, TraceContext, testing::InProcessBus};
 use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
 
 fn make_status_event(tenant_id: TenantId) -> IngestStatusEvent {
@@ -38,13 +38,17 @@ async fn envelope_round_trip_with_trace_context() {
 
     let tenant_id = TenantId::new();
     let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_owned();
-    let env = EventEnvelope::new(tenant_id, make_status_event(tenant_id))
-        .with_trace_context(TraceContext {
+    let env = EventEnvelope::new(tenant_id, make_status_event(tenant_id)).with_trace_context(
+        TraceContext {
             traceparent: traceparent.clone(),
             tracestate: String::new(),
-        });
+        },
+    );
 
-    producer.publish("test.trace.envelope", &[], env).await.unwrap();
+    producer
+        .publish("test.trace.envelope", &[], env)
+        .await
+        .unwrap();
 
     let received = consumer.next().await.unwrap().unwrap();
     let tc = received.trace_context.unwrap();
@@ -59,10 +63,13 @@ async fn envelope_round_trip_with_blob_ref() {
 
     let tenant_id = TenantId::new();
     let blob_uri = format!("rb-blob://tenant_{tenant_id}/abcdef1234567890abcdef");
-    let env = EventEnvelope::new(tenant_id, make_status_event(tenant_id))
-        .with_blob_ref(blob_uri.clone());
+    let env =
+        EventEnvelope::new(tenant_id, make_status_event(tenant_id)).with_blob_ref(blob_uri.clone());
 
-    producer.publish("test.blob.envelope", &[], env).await.unwrap();
+    producer
+        .publish("test.blob.envelope", &[], env)
+        .await
+        .unwrap();
 
     let received = consumer.next().await.unwrap().unwrap();
     assert_eq!(received.blob_ref, Some(blob_uri));

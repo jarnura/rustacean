@@ -1,4 +1,4 @@
-use rb_kafka::{dlq_topic, testing::InProcessBus, EventEnvelope, SchemaVersion};
+use rb_kafka::{EventEnvelope, SchemaVersion, dlq_topic, testing::InProcessBus};
 use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
 
 fn poison_event(tenant_id: TenantId) -> EventEnvelope<IngestStatusEvent> {
@@ -28,13 +28,19 @@ async fn terminal_error_routes_to_dlq() {
     let env = poison_event(tenant_id);
     let event_id = env.event_id;
 
-    producer.publish("rb.ingest.parse.commands", &[], env).await.unwrap();
+    producer
+        .publish("rb.ingest.parse.commands", &[], env)
+        .await
+        .unwrap();
 
     let received = consumer.next().await.unwrap().unwrap();
     assert_eq!(received.event_id, event_id);
 
     // Simulate terminal processing failure → route to DLQ.
-    consumer.nack_to_dlq(&received, "deserialization failure").await.unwrap();
+    consumer
+        .nack_to_dlq(&received, "deserialization failure")
+        .await
+        .unwrap();
 
     let dlq_msg = dlq_consumer.next().await.unwrap().unwrap();
     assert_eq!(dlq_msg.event_id, event_id);
@@ -52,10 +58,16 @@ async fn dlq_message_preserves_original_payload() {
     let tenant_id = TenantId::new();
     let env = poison_event(tenant_id);
 
-    producer.publish("rb.ingest.graph.commands", &[], env.clone()).await.unwrap();
+    producer
+        .publish("rb.ingest.graph.commands", &[], env.clone())
+        .await
+        .unwrap();
 
     let received = consumer.next().await.unwrap().unwrap();
-    consumer.nack_to_dlq(&received, "schema version mismatch").await.unwrap();
+    consumer
+        .nack_to_dlq(&received, "schema version mismatch")
+        .await
+        .unwrap();
 
     let dlq_msg = dlq_consumer.next().await.unwrap().unwrap();
     // Payload fields.

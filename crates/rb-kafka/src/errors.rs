@@ -19,11 +19,16 @@ pub enum KafkaError {
     #[error("consumer lagged; messages dropped")]
     ConsumerLag,
     #[error("invalid uuid in header {header}: {source}")]
-    InvalidHeaderUuid { header: &'static str, source: uuid::Error },
+    InvalidHeaderUuid {
+        header: &'static str,
+        source: uuid::Error,
+    },
     #[error("rdkafka error: {0}")]
     Rdkafka(#[from] rdkafka::error::KafkaError),
     #[error("max retries exceeded; message should be routed to DLQ")]
     MaxRetriesExceeded,
+    #[error("malformed W3C traceparent header: {0}")]
+    InvalidTraceparent(String),
 }
 
 impl KafkaError {
@@ -38,6 +43,7 @@ impl KafkaError {
                 | KafkaError::TenantMismatch
                 | KafkaError::InvalidBlobRef(_)
                 | KafkaError::InvalidHeaderUuid { .. }
+                | KafkaError::InvalidTraceparent(_)
         )
     }
 }

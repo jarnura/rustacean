@@ -5,7 +5,7 @@
 //! the test does not break if label sets are extended later.
 
 use metrics_util::debugging::DebuggingRecorder;
-use rb_kafka::{dlq_topic, testing::InProcessBus, EventEnvelope};
+use rb_kafka::{EventEnvelope, dlq_topic, testing::InProcessBus};
 use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
 
 fn make_event(tenant_id: TenantId) -> EventEnvelope<IngestStatusEvent> {
@@ -50,7 +50,10 @@ async fn all_required_metric_names_are_emitted() {
     let received = consumer.next().await.unwrap().unwrap();
 
     // 3. nack_to_dlq → emits rb_kafka_dlq_total
-    consumer.nack_to_dlq(&received, "test-reason").await.unwrap();
+    consumer
+        .nack_to_dlq(&received, "test-reason")
+        .await
+        .unwrap();
 
     // 4. Read back the DLQ message so dlq_consumer is exercised.
     let _dlq_msg = dlq_consumer.next().await.unwrap().unwrap();

@@ -19,8 +19,9 @@ use uuid::Uuid;
 use crate::{
     dlq::dlq_topic,
     envelope::{
-        DeliveryReport, EventEnvelope, HEADER_ATTEMPT, HEADER_BLOB_REF, HEADER_EVENT_ID,
-        HEADER_SCHEMA_VERSION, HEADER_TENANT_ID, HEADER_TRACEPARENT, HEADER_TRACESTATE,
+        DeliveryReport, EventEnvelope, HEADER_ATTEMPT, HEADER_BLOB_REF, HEADER_CREATED_AT_MS,
+        HEADER_EVENT_ID, HEADER_SCHEMA_VERSION, HEADER_TENANT_ID, HEADER_TRACEPARENT,
+        HEADER_TRACESTATE,
     },
     errors::KafkaError,
     producer::decode_envelope,
@@ -131,6 +132,7 @@ impl<E: ProstMessage> TestProducer<E> {
             }
         }
 
+        let created_at = envelope.created_at;
         let headers = envelope_to_headers(&envelope);
         let payload = envelope.payload.encode_to_vec();
 
@@ -148,6 +150,10 @@ impl<E: ProstMessage> TestProducer<E> {
             "topic" => topic.to_owned()
         )
         .increment(1);
+        #[allow(clippy::cast_precision_loss)]
+        let e2e_secs =
+            (chrono::Utc::now() - created_at).num_milliseconds().max(0) as f64 / 1_000.0;
+        histogram!("rb_kafka_e2e_latency_seconds", "topic" => topic.to_owned()).record(e2e_secs);
 
         Ok(DeliveryReport { topic: topic.to_owned(), partition: 0, offset: 0 })
     }
@@ -259,6 +265,7 @@ fn envelope_to_headers<E: ProstMessage>(env: &EventEnvelope<E>) -> Vec<(String, 
         (HEADER_EVENT_ID.to_owned(), env.event_id.to_string()),
         (HEADER_SCHEMA_VERSION.to_owned(), env.schema_version.as_str().to_owned()),
         (HEADER_ATTEMPT.to_owned(), env._meta.attempt.to_string()),
+        (HEADER_CREATED_AT_MS.to_owned(), env.created_at.timestamp_millis().to_string()),
     ];
     if let Some(ref blob) = env.blob_ref {
         h.push((HEADER_BLOB_REF.to_owned(), blob.clone()));

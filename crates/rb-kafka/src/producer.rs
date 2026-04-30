@@ -13,8 +13,8 @@ use crate::{
     config::ProducerCfg,
     envelope::{
         DeliveryReport, EnvelopeMeta, EventEnvelope, SchemaVersion, TraceContext, HEADER_ATTEMPT,
-        HEADER_BLOB_REF, HEADER_EVENT_ID, HEADER_PROCESS_AFTER_MS, HEADER_SCHEMA_VERSION,
-        HEADER_TENANT_ID, HEADER_TRACEPARENT, HEADER_TRACESTATE,
+        HEADER_BLOB_REF, HEADER_CREATED_AT_MS, HEADER_EVENT_ID, HEADER_PROCESS_AFTER_MS,
+        HEADER_SCHEMA_VERSION, HEADER_TENANT_ID, HEADER_TRACEPARENT, HEADER_TRACESTATE,
     },
     errors::KafkaError,
     headers::KafkaHeaderInjector,
@@ -49,6 +49,7 @@ impl<E: ProstMessage> Producer<E> {
         key: &[u8],
         envelope: EventEnvelope<E>,
     ) -> Result<DeliveryReport, KafkaError> {
+        let created_at = envelope.created_at;
         let headers = build_headers(&envelope);
         let payload = envelope.payload.encode_to_vec();
 
@@ -66,6 +67,11 @@ impl<E: ProstMessage> Producer<E> {
                     "topic" => topic.to_owned()
                 )
                 .increment(1);
+                #[allow(clippy::cast_precision_loss)]
+                let e2e_secs =
+                    (chrono::Utc::now() - created_at).num_milliseconds().max(0) as f64 / 1_000.0;
+                histogram!("rb_kafka_e2e_latency_seconds", "topic" => topic.to_owned())
+                    .record(e2e_secs);
                 Ok(DeliveryReport { topic: topic.to_owned(), partition, offset })
             }
             Err((e, _)) => {
@@ -94,6 +100,7 @@ impl<E: ProstMessage> Producer<E> {
         mut envelope: EventEnvelope<E>,
         policy: &RetryPolicy,
     ) -> Result<DeliveryReport, KafkaError> {
+        let created_at = envelope.created_at;
         let next_attempt = envelope._meta.attempt + 1;
         envelope._meta.attempt = next_attempt;
 
@@ -122,11 +129,10 @@ impl<E: ProstMessage> Producer<E> {
             "attempt" => next_attempt.to_string()
         )
         .increment(1);
-        histogram!(
-            "rb_kafka_e2e_latency_seconds",
-            "topic" => topic.to_owned()
-        )
-        .record(0.0);
+        #[allow(clippy::cast_precision_loss)]
+        let e2e_secs =
+            (chrono::Utc::now() - created_at).num_milliseconds().max(0) as f64 / 1_000.0;
+        histogram!("rb_kafka_e2e_latency_seconds", "topic" => topic.to_owned()).record(e2e_secs);
 
         Ok(DeliveryReport { topic: retry_topic.to_owned(), partition, offset })
     }
@@ -153,6 +159,7 @@ fn build_headers<E: ProstMessage>(envelope: &EventEnvelope<E>) -> OwnedHeaders {
     let tenant_str = envelope.tenant_id.to_string();
     let event_id_str = envelope.event_id.to_string();
     let attempt_str = envelope._meta.attempt.to_string();
+    let created_at_ms_str = envelope.created_at.timestamp_millis().to_string();
 
     let mut h = OwnedHeaders::new();
     h = h.insert(Header { key: HEADER_TENANT_ID, value: Some(tenant_str.as_bytes()) });
@@ -162,6 +169,10 @@ fn build_headers<E: ProstMessage>(envelope: &EventEnvelope<E>) -> OwnedHeaders {
         value: Some(envelope.schema_version.as_str().as_bytes()),
     });
     h = h.insert(Header { key: HEADER_ATTEMPT, value: Some(attempt_str.as_bytes()) });
+    h = h.insert(Header {
+        key: HEADER_CREATED_AT_MS,
+        value: Some(created_at_ms_str.as_bytes()),
+    });
 
     if let Some(ref blob_ref) = envelope.blob_ref {
         h = h.insert(Header { key: HEADER_BLOB_REF, value: Some(blob_ref.as_bytes()) });
@@ -253,13 +264,18 @@ pub fn decode_envelope<E: ProstMessage + Default>(
     let payload_msg =
         E::decode(payload).map_err(|e| KafkaError::Deserialization(e.to_string()))?;
 
+    let created_at = get(HEADER_CREATED_AT_MS)
+        .and_then(|s| s.parse::<i64>().ok())
+        .and_then(chrono::DateTime::from_timestamp_millis)
+        .unwrap_or_else(chrono::Utc::now);
+
     Ok(EventEnvelope {
         tenant_id,
         event_id,
         schema_version,
         trace_context,
         blob_ref,
-        created_at: chrono::Utc::now(),
+        created_at,
         payload: payload_msg,
         _meta: EnvelopeMeta { topic: topic.to_owned(), partition, offset, attempt },
     })

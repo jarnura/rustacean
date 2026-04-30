@@ -15,7 +15,7 @@ pub mod testing {
 
 pub use config::{ConsumerCfg, ProducerCfg};
 pub use consumer::Consumer;
-pub use dlq::{dlq_topic, retry_topic};
+pub use dlq::{dlq_topic, retry_topic, DlqRouter};
 pub use envelope::{DeliveryReport, EnvelopeMeta, EventEnvelope, SchemaVersion, TraceContext};
 pub use errors::KafkaError;
 pub use producer::Producer;

@@ -1,0 +1,45 @@
+[package]
+name = "rb-sse"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+test-util = []
+
+[dependencies]
+rb-schemas = { path = "../rb-schemas", version = "0.1.0" }
+rb-tenant = { path = "../rb-tenant", version = "0.1.0" }
+tokio.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+chrono.workspace = true
+dashmap.workspace = true
+metrics.workspace = true
+uuid.workspace = true
+axum.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }
+metrics-util.workspace = true
+
+[[test]]
+name = "single_client"
+required-features = ["test-util"]
+
+[[test]]
+name = "multi_tenant_isolation"
+required-features = ["test-util"]
+
+[[test]]
+name = "reconnect_replay"
+required-features = ["test-util"]
+
+[lints]
+workspace = true

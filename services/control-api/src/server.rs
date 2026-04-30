@@ -6,6 +6,8 @@ use jsonwebtoken::EncodingKey;
 use rb_auth::{LoginRateLimiter, PasswordHasher};
 use rb_email::{SmtpConfig, from_transport};
 use rb_github::{GhApp, Secret};
+use rb_kafka::ConsumerCfg;
+use rb_sse::{EventBus, SseConfig};
 use sqlx::postgres::PgPoolOptions;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -13,7 +15,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-use crate::{config::Config, routes, state::AppState};
+use crate::{config::Config, ingest_consumer, routes, state::AppState};
 
 /// Connects to Postgres, builds [`AppState`], and drives the server until shutdown.
 ///
@@ -58,6 +60,8 @@ pub async fn run(config: Config) -> Result<()> {
         g.start_token_sweep();
     }
 
+    let sse_bus = Arc::new(EventBus::new(SseConfig::default()));
+
     let state = AppState {
         pool,
         email_sender: Arc::from(email_sender),
@@ -65,7 +69,17 @@ pub async fn run(config: Config) -> Result<()> {
         login_rate_limiter: Arc::new(LoginRateLimiter::new()),
         config: Arc::new(config.clone()),
         gh,
+        sse_bus: Arc::clone(&sse_bus),
     };
+
+    // Spawn the Kafka → SSE fan-out consumer.  Errors here are logged but do
+    // not prevent the HTTP server from starting — the SSE endpoint degrades
+    // gracefully when Kafka is unavailable (no events; long-poll returns empty).
+    let consumer_cfg = ConsumerCfg::new("control-api-sse");
+    match ingest_consumer::spawn(&consumer_cfg, sse_bus) {
+        Ok(_handle) => tracing::info!("ingest_consumer started"),
+        Err(e) => tracing::warn!("ingest_consumer failed to start (Kafka unavailable?): {e}"),
+    }
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -94,7 +108,9 @@ pub async fn run(config: Config) -> Result<()> {
 /// Fails fast at startup if keys are present but malformed — an operator
 /// mistake should surface immediately, not at first API call.
 fn build_gh_app(config: &Config) -> Result<Option<GhApp>> {
-    let (Some(app_id), Some(pem_b64)) = (config.gh_app_id, config.gh_app_private_key_b64.as_deref()) else {
+    let (Some(app_id), Some(pem_b64)) =
+        (config.gh_app_id, config.gh_app_private_key_b64.as_deref())
+    else {
         tracing::info!("RB_GH_APP_ID / RB_GH_APP_PRIVATE_KEY not set — GitHub App disabled");
         return Ok(None);
     };

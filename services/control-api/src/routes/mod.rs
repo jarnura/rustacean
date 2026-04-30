@@ -4,6 +4,7 @@ pub mod auth_logout;
 pub mod auth_verify;
 pub mod github;
 pub mod health;
+pub mod ingest;
 pub mod me;
 pub mod repos;
 pub mod tenants;
@@ -20,6 +21,8 @@ use crate::routes::{
     github::repos::list_available_repos,
     github::webhook::github_webhook,
     health::{health_check, openapi_json, ready_check},
+    ingest::events_stream::events_stream,
+    ingest::test_publish::test_publish,
     me::{get_me, switch_tenant},
     repos::{connect_repo, list_repos, trigger_ingest},
     tenants::{invite_member, list_members, remove_member, transfer_ownership, update_member_role},
@@ -53,5 +56,7 @@ pub fn build(state: AppState) -> Router {
         .route("/v1/github/installations/{id}/available-repos", get(list_available_repos))
         .route("/v1/repos", post(connect_repo).get(list_repos))
         .route("/v1/repos/{id}/ingest", post(trigger_ingest))
+        .route("/v1/ingest/events", get(events_stream))
+        .route("/v1/ingest/test-publish", post(test_publish))
         .with_state(state)
 }

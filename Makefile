@@ -1,4 +1,29 @@
-.PHONY: blob-smoke blob-smoke-s3
+.PHONY: blob-smoke blob-smoke-s3 ingest-smoke
+
+# Run SSE ingest smoke tests (no Kafka required — uses dev test-publish route).
+#
+# Requires a running control-api with RB_DEV_TEST_ROUTES=1 and a valid session
+# cookie or bearer token in RB_SMOKE_TOKEN.  Defaults target localhost:3000.
+#
+# Usage:
+#   make ingest-smoke
+#   RB_SMOKE_BASE_URL=http://localhost:3001 RB_SMOKE_TOKEN=<jwt> make ingest-smoke
+ingest-smoke:
+	@echo "==> ingest smoke: rb-sse unit tests"
+	cargo test -p rb-sse --features test-util -- --nocapture
+	@echo "==> ingest smoke: test-producer binary compiles"
+	cargo build -p control-api --bin rb-test-producer --quiet
+	@echo "==> ingest smoke: PASS (SSE unit suite green; producer binary built)"
+	@echo ""
+	@echo "    To exercise the full SSE end-to-end path against a live server:"
+	@echo "      1. Start control-api: RB_DEV_TEST_ROUTES=1 cargo run -p control-api"
+	@echo "      2. Open an SSE stream: curl -N -H 'Authorization: Bearer \$$RB_SMOKE_TOKEN' \\"
+	@echo "           \$${RB_SMOKE_BASE_URL:-http://localhost:3000}/v1/ingest/events"
+	@echo "      3. Publish a test event: curl -X POST \\"
+	@echo "           -H 'Authorization: Bearer \$$RB_SMOKE_TOKEN' \\"
+	@echo "           -H 'Content-Type: application/json' \\"
+	@echo "           -d '{\"event\":\"ingest.status\",\"data\":{\"status\":\"processing\"}}' \\"
+	@echo "           \$${RB_SMOKE_BASE_URL:-http://localhost:3000}/v1/ingest/test-publish"
 
 # Run filesystem blob store smoke tests (no external deps required).
 blob-smoke:

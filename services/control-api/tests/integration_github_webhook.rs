@@ -14,6 +14,7 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use control_api::{AppState, Config, build};
+use rb_sse::{EventBus, SseConfig};
 use hmac::{Hmac, Mac};
 use http_body_util::BodyExt as _;
 use jsonwebtoken::EncodingKey;
@@ -104,6 +105,7 @@ fn state_with_gh(secret: &[u8]) -> AppState {
             rsa_key(),
             Secret::new(secret.to_vec()),
         ))),
+        sse_bus: Arc::new(EventBus::new(SseConfig::default())),
     }
 }
 
@@ -116,6 +118,7 @@ fn state_without_gh() -> AppState {
         login_rate_limiter: Arc::new(LoginRateLimiter::new()),
         config: Arc::new(config),
         gh: None,
+        sse_bus: Arc::new(EventBus::new(SseConfig::default())),
     }
 }
 

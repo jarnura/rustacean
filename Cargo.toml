@@ -11,6 +11,7 @@ members = [
     "crates/rb-github",
     "crates/rb-blob",
     "crates/rb-kafka",
+    "crates/rb-sse",
     "services/migrate",
     "services/control-api",
 ]

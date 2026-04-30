@@ -12,6 +12,7 @@ use tower::ServiceExt as _;
 use uuid::Uuid;
 
 use control_api::{AppState, Config, build};
+use rb_sse::{EventBus, SseConfig};
 
 async fn real_db_state() -> Option<(AppState, PgPool)> {
     let db_url = std::env::var("RB_DATABASE_URL").ok()?;
@@ -44,6 +45,8 @@ async fn real_db_state() -> Option<(AppState, PgPool)> {
         gh_app_id: None,
         gh_app_private_key_b64: None,
         gh_app_webhook_secret: None,
+        kafka_bootstrap_servers: "localhost:9092".to_owned(),
+        dev_test_routes: false,
     };
     let state = AppState {
         pool: pool.clone(),
@@ -52,6 +55,7 @@ async fn real_db_state() -> Option<(AppState, PgPool)> {
         login_rate_limiter: Arc::new(LoginRateLimiter::new()),
         config: Arc::new(config),
         gh: None,
+        sse_bus: Arc::new(EventBus::new(SseConfig::default())),
     };
     Some((state, pool))
 }

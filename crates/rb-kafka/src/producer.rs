@@ -1,5 +1,6 @@
 use std::{marker::PhantomData, str::FromStr as _, time::Duration};
 
+use metrics::{counter, histogram};
 use prost::Message as ProstMessage;
 use rdkafka::{
     message::{Header, OwnedHeaders},
@@ -17,6 +18,7 @@ use crate::{
     },
     errors::KafkaError,
     headers::KafkaHeaderInjector,
+    retry::RetryPolicy,
 };
 
 pub struct Producer<E: ProstMessage> {
@@ -28,8 +30,9 @@ impl<E: ProstMessage> Producer<E> {
     pub fn new(cfg: &ProducerCfg) -> Result<Self, KafkaError> {
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", &cfg.bootstrap_servers)
-            .set("acks", &cfg.acks)
-            .set("enable.idempotence", cfg.enable_idempotence.to_string())
+            // ADR-006 §3.1 invariants — not caller-configurable.
+            .set("acks", "all")
+            .set("enable.idempotence", "true")
             .set("compression.type", &cfg.compression_type)
             .set("linger.ms", cfg.linger_ms.to_string())
             .set("delivery.timeout.ms", cfg.delivery_timeout_ms.to_string())
@@ -54,14 +57,95 @@ impl<E: ProstMessage> Producer<E> {
             .payload(payload.as_slice())
             .headers(headers);
 
+        match self.inner.send(record, Duration::from_secs(30)).await {
+            Ok((partition, offset)) => {
+                counter!(
+                    "rb_kafka_messages_total",
+                    "op" => "produce",
+                    "outcome" => "ok",
+                    "topic" => topic.to_owned()
+                )
+                .increment(1);
+                Ok(DeliveryReport { topic: topic.to_owned(), partition, offset })
+            }
+            Err((e, _)) => {
+                counter!(
+                    "rb_kafka_messages_total",
+                    "op" => "produce",
+                    "outcome" => "err",
+                    "topic" => topic.to_owned()
+                )
+                .increment(1);
+                Err(KafkaError::from(e))
+            }
+        }
+    }
+
+    /// Publish `envelope` to the retry topic for `topic`, incrementing the attempt counter.
+    /// Uses `policy.process_after_ms` to set the backoff timestamp header.
+    /// Returns `Err(KafkaError::MaxRetriesExceeded)` when the policy considers this attempt
+    /// terminal (i.e. `policy.is_terminal(next_attempt)`).
+    #[allow(clippy::used_underscore_binding)]
+    pub async fn publish_retry(
+        &self,
+        topic: &str,
+        retry_topic: &str,
+        key: &[u8],
+        mut envelope: EventEnvelope<E>,
+        policy: &RetryPolicy,
+    ) -> Result<DeliveryReport, KafkaError> {
+        let next_attempt = envelope._meta.attempt + 1;
+        envelope._meta.attempt = next_attempt;
+
+        if policy.is_terminal(next_attempt) {
+            return Err(KafkaError::MaxRetriesExceeded);
+        }
+
+        let due_ms = policy.process_after_ms(next_attempt);
+        let headers = build_headers_with_retry(&envelope, due_ms);
+        let payload = envelope.payload.encode_to_vec();
+
+        let record = FutureRecord::to(retry_topic)
+            .key(key)
+            .payload(payload.as_slice())
+            .headers(headers);
+
         let (partition, offset) = self
             .inner
             .send(record, Duration::from_secs(30))
             .await
             .map_err(|(e, _)| KafkaError::from(e))?;
 
-        Ok(DeliveryReport { topic: topic.to_owned(), partition, offset })
+        counter!(
+            "rb_kafka_retry_total",
+            "topic" => topic.to_owned(),
+            "attempt" => next_attempt.to_string()
+        )
+        .increment(1);
+        histogram!(
+            "rb_kafka_e2e_latency_seconds",
+            "topic" => topic.to_owned()
+        )
+        .record(0.0);
+
+        Ok(DeliveryReport { topic: retry_topic.to_owned(), partition, offset })
     }
+}
+
+/// Extend `build_headers` output with an optional `x-rb-process-after-ms` header.
+#[allow(clippy::used_underscore_binding)]
+fn build_headers_with_retry<E: ProstMessage>(
+    envelope: &EventEnvelope<E>,
+    due_ms: Option<u64>,
+) -> OwnedHeaders {
+    let mut h = build_headers(envelope);
+    if let Some(ms) = due_ms {
+        h = h.insert(Header {
+            key: HEADER_PROCESS_AFTER_MS,
+            value: Some(ms.to_string().as_bytes()),
+        });
+    }
+    h
 }
 
 #[allow(clippy::used_underscore_binding)]

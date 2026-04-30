@@ -22,6 +22,8 @@ pub enum KafkaError {
     InvalidHeaderUuid { header: &'static str, source: uuid::Error },
     #[error("rdkafka error: {0}")]
     Rdkafka(#[from] rdkafka::error::KafkaError),
+    #[error("max retries exceeded; message should be routed to DLQ")]
+    MaxRetriesExceeded,
 }
 
 impl KafkaError {

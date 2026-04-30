@@ -86,6 +86,9 @@ hmac = "0.12"
 subtle = "2"
 moka = { version = "0.12", features = ["future"] }
 hex = "0.4"
+# Metrics facade (library crates use this; tests use metrics-util for assertions)
+metrics = "0.24"
+metrics-util = { version = "0.18", features = ["debugging"] }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

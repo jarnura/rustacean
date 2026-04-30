@@ -8,6 +8,8 @@ mod store;
 
 pub use blob_ref::BlobRef;
 pub use error::BlobError;
+#[cfg(feature = "s3")]
+pub use error::S3ErrorKind;
 pub use filesystem::FilesystemStore;
 pub use selector::store_from_env;
 pub use store::BlobStore;

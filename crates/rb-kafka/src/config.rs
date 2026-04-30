@@ -1,11 +1,13 @@
 use std::time::Duration;
 
 /// Producer configuration loaded from environment.
+///
+/// Note: `acks` and `enable_idempotence` are intentionally absent — they are
+/// hardcoded to ADR-006 §3.1 invariants (`acks=all`, `enable.idempotence=true`)
+/// in [`crate::producer::Producer::new`] and cannot be overridden by callers.
 #[derive(Debug, Clone)]
 pub struct ProducerCfg {
     pub bootstrap_servers: String,
-    pub acks: String,
-    pub enable_idempotence: bool,
     pub compression_type: String,
     pub linger_ms: u64,
     pub delivery_timeout_ms: u64,
@@ -17,8 +19,6 @@ impl Default for ProducerCfg {
         Self {
             bootstrap_servers: std::env::var("KAFKA_BOOTSTRAP_SERVERS")
                 .unwrap_or_else(|_| "kafka:9092".to_owned()),
-            acks: "all".to_owned(),
-            enable_idempotence: true,
             compression_type: "zstd".to_owned(),
             linger_ms: 20,
             delivery_timeout_ms: 120_000,

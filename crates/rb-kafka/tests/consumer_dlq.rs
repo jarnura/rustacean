@@ -1,4 +1,4 @@
-use rb_kafka::{dlq_topic, testing::InProcessBus, EventEnvelope};
+use rb_kafka::{dlq_topic, testing::InProcessBus, EventEnvelope, SchemaVersion};
 use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
 
 fn poison_event(tenant_id: TenantId) -> EventEnvelope<IngestStatusEvent> {
@@ -52,12 +52,17 @@ async fn dlq_message_preserves_original_payload() {
     let tenant_id = TenantId::new();
     let env = poison_event(tenant_id);
 
-    producer.publish("rb.ingest.graph.commands", &[], env).await.unwrap();
+    producer.publish("rb.ingest.graph.commands", &[], env.clone()).await.unwrap();
 
     let received = consumer.next().await.unwrap().unwrap();
     consumer.nack_to_dlq(&received, "schema version mismatch").await.unwrap();
 
     let dlq_msg = dlq_consumer.next().await.unwrap().unwrap();
+    // Payload fields.
     assert_eq!(dlq_msg.payload.ingest_request_id, "req-poison");
     assert_eq!(dlq_msg.payload.error_message, "simulated failure");
+    // Envelope headers must be preserved (K-HIGH-2).
+    assert_eq!(dlq_msg.tenant_id, tenant_id);
+    assert_eq!(dlq_msg.event_id, env.event_id);
+    assert_eq!(dlq_msg.schema_version, SchemaVersion::V1);
 }

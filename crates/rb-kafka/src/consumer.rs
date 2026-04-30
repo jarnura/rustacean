@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 use futures::StreamExt as _;
+use metrics::{counter, gauge, histogram};
 use prost::Message as ProstMessage;
 use rdkafka::{
     consumer::{CommitMode, Consumer as RdConsumer, StreamConsumer},
@@ -11,7 +12,11 @@ use rdkafka::{
 use crate::{
     config::ConsumerCfg,
     dlq::dlq_topic,
-    envelope::{EventEnvelope, HEADER_DLQ_AT, HEADER_DLQ_REASON},
+    envelope::{
+        EventEnvelope, HEADER_ATTEMPT, HEADER_BLOB_REF, HEADER_DLQ_AT, HEADER_DLQ_REASON,
+        HEADER_EVENT_ID, HEADER_SCHEMA_VERSION, HEADER_TENANT_ID, HEADER_TRACEPARENT,
+        HEADER_TRACESTATE,
+    },
     errors::KafkaError,
     producer::decode_envelope,
 };
@@ -62,7 +67,58 @@ impl<E: ProstMessage + Default> Consumer<E> {
                 let topic = m.topic().to_owned();
                 let partition = m.partition();
                 let offset = m.offset();
-                Some(decode_envelope(payload, &headers, &topic, partition, offset))
+
+                // Emit consumer lag gauge if watermark info is available.
+                // rdkafka StreamConsumer exposes fetch_watermarks synchronously.
+                if let Ok((_, high)) = self.inner.fetch_watermarks(
+                    &topic,
+                    partition,
+                    Duration::from_millis(100),
+                ) {
+                    #[allow(clippy::cast_precision_loss)]
+                    let lag = (high - offset).max(0) as f64;
+                    gauge!(
+                        "rb_kafka_consumer_lag_records",
+                        "topic" => topic.clone(),
+                        "partition" => partition.to_string(),
+                        "group" => String::new()
+                    )
+                    .set(lag);
+                }
+
+                let result = decode_envelope(payload, &headers, &topic, partition, offset);
+                match &result {
+                    Ok(env) => {
+                        counter!(
+                            "rb_kafka_messages_total",
+                            "op" => "consume",
+                            "outcome" => "ok",
+                            "topic" => topic.clone()
+                        )
+                        .increment(1);
+                        // Measure wall-clock lag from when the envelope was created.
+                        #[allow(clippy::cast_precision_loss)]
+                        let age_secs = (chrono::Utc::now() - env.created_at)
+                            .num_milliseconds()
+                            .max(0) as f64
+                            / 1_000.0;
+                        histogram!(
+                            "rb_kafka_consume_lag_seconds",
+                            "topic" => topic.clone()
+                        )
+                        .record(age_secs);
+                    }
+                    Err(_) => {
+                        counter!(
+                            "rb_kafka_messages_total",
+                            "op" => "consume",
+                            "outcome" => "err",
+                            "topic" => topic.clone()
+                        )
+                        .increment(1);
+                    }
+                }
+                Some(result)
             }
         }
     }
@@ -87,7 +143,38 @@ impl<E: ProstMessage + Default> Consumer<E> {
 
         let dlq = dlq_topic(&env._meta.topic);
         let dlq_at = chrono::Utc::now().timestamp_millis().to_string();
-        let headers = rdkafka::message::OwnedHeaders::new()
+
+        // Re-build all ADR-006 §3.1 envelope headers so decode_envelope succeeds on DLQ.
+        let tenant_str = env.tenant_id.to_string();
+        let event_id_str = env.event_id.to_string();
+        let attempt_str = env._meta.attempt.to_string();
+        let schema_str = env.schema_version.as_str();
+
+        let mut headers = rdkafka::message::OwnedHeaders::new()
+            .insert(Header { key: HEADER_TENANT_ID, value: Some(tenant_str.as_bytes()) })
+            .insert(Header { key: HEADER_EVENT_ID, value: Some(event_id_str.as_bytes()) })
+            .insert(Header { key: HEADER_SCHEMA_VERSION, value: Some(schema_str.as_bytes()) })
+            .insert(Header { key: HEADER_ATTEMPT, value: Some(attempt_str.as_bytes()) });
+
+        if let Some(ref blob_ref) = env.blob_ref {
+            headers = headers
+                .insert(Header { key: HEADER_BLOB_REF, value: Some(blob_ref.as_bytes()) });
+        }
+        if let Some(ref tc) = env.trace_context {
+            if !tc.traceparent.is_empty() {
+                headers = headers.insert(Header {
+                    key: HEADER_TRACEPARENT,
+                    value: Some(tc.traceparent.as_bytes()),
+                });
+            }
+            if !tc.tracestate.is_empty() {
+                headers = headers.insert(Header {
+                    key: HEADER_TRACESTATE,
+                    value: Some(tc.tracestate.as_bytes()),
+                });
+            }
+        }
+        headers = headers
             .insert(Header { key: HEADER_DLQ_REASON, value: Some(reason.as_bytes()) })
             .insert(Header { key: HEADER_DLQ_AT, value: Some(dlq_at.as_bytes()) });
 
@@ -102,6 +189,13 @@ impl<E: ProstMessage + Default> Consumer<E> {
             .send(record, Duration::from_secs(10))
             .await
             .map_err(|(e, _)| KafkaError::from(e))?;
+
+        counter!(
+            "rb_kafka_dlq_total",
+            "topic" => env._meta.topic.clone(),
+            "reason" => reason.to_owned()
+        )
+        .increment(1);
 
         Ok(())
     }

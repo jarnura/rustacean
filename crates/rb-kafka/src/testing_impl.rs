@@ -11,6 +11,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use metrics::{counter, histogram};
 use prost::Message as ProstMessage;
 use tokio::sync::{broadcast, Mutex as AsyncMutex};
 use uuid::Uuid;
@@ -140,6 +141,14 @@ impl<E: ProstMessage> TestProducer<E> {
             topic: topic.to_owned(),
         });
 
+        counter!(
+            "rb_kafka_messages_total",
+            "op" => "produce",
+            "outcome" => "ok",
+            "topic" => topic.to_owned()
+        )
+        .increment(1);
+
         Ok(DeliveryReport { topic: topic.to_owned(), partition: 0, offset: 0 })
     }
 }
@@ -160,7 +169,39 @@ impl<E: ProstMessage + Default> TestConsumer<E> {
         let mut rx = self.receiver.lock().await;
         match rx.recv().await {
             Ok(msg) => {
-                Some(decode_envelope(&msg.payload, &msg.headers, &msg.topic, 0, 0))
+                let topic = msg.topic.clone();
+                let result = decode_envelope(&msg.payload, &msg.headers, &msg.topic, 0, 0);
+                match &result {
+                    Ok(env) => {
+                        counter!(
+                            "rb_kafka_messages_total",
+                            "op" => "consume",
+                            "outcome" => "ok",
+                            "topic" => topic.clone()
+                        )
+                        .increment(1);
+                        #[allow(clippy::cast_precision_loss)]
+                        let age_secs = (chrono::Utc::now() - env.created_at)
+                            .num_milliseconds()
+                            .max(0) as f64
+                            / 1_000.0;
+                        histogram!(
+                            "rb_kafka_consume_lag_seconds",
+                            "topic" => topic.clone()
+                        )
+                        .record(age_secs);
+                    }
+                    Err(_) => {
+                        counter!(
+                            "rb_kafka_messages_total",
+                            "op" => "consume",
+                            "outcome" => "err",
+                            "topic" => topic.clone()
+                        )
+                        .increment(1);
+                    }
+                }
+                Some(result)
             }
             Err(broadcast::error::RecvError::Closed) => None,
             Err(broadcast::error::RecvError::Lagged(_)) => {
@@ -197,6 +238,13 @@ impl<E: ProstMessage + Default> TestConsumer<E> {
             headers,
             topic: dlq,
         });
+
+        counter!(
+            "rb_kafka_dlq_total",
+            "topic" => self.topic.clone(),
+            "reason" => reason.to_owned()
+        )
+        .increment(1);
 
         Ok(())
     }

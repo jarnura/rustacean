@@ -79,6 +79,23 @@ docker compose -f compose/dev.yml exec postgres \
 
 See `docs/PORT_MAP.md` for the full port table, including Tailscale remapping for mars.
 
+## Auto-rebuild on main merge (mars)
+
+The dev-stack on mars is kept current automatically. When a commit lands on `main` that touches a built service, `scripts/dev-stack-watch.sh` detects the new SHA and calls `scripts/dev-stack-auto-rebuild.sh`, which rebuilds only the affected images and restarts the containers.
+
+**To skip one rebuild cycle** (e.g. during a planned manual intervention):
+```bash
+touch compose/.no-auto-rebuild   # on mars, before the merge
+```
+The file is consumed and deleted on the next polling cycle.
+
+**To query recent rebuild results:**
+```bash
+scripts/dev-stack-auto-rebuild.sh --logs 10
+```
+
+Full documentation: [docs/dev-stack-auto-rebuild.md](../docs/dev-stack-auto-rebuild.md)
+
 ## Tear down
 
 ```bash

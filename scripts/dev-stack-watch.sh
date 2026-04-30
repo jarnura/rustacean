@@ -27,18 +27,28 @@ BRANCH="${BRANCH:-main}"
 
 REBUILD_SCRIPT="$SCRIPT_DIR/dev-stack-auto-rebuild.sh"
 
+# Persist LAST_KNOWN_SHA across restarts so commits that land during an outage
+# are not silently dropped when the service comes back up.
+STATE_DIR="${RB_STATE_DIR:-"$HOME/.local/state/rustbrain"}"
+SHA_STATE_FILE="$STATE_DIR/dev-stack-watch-last-sha"
+mkdir -p "$STATE_DIR"
+
 echo "[dev-stack-watch] started — polling $REMOTE/$BRANCH every ${POLL_INTERVAL}s"
 echo "[dev-stack-watch] repo: $REPO_ROOT"
 echo "[dev-stack-watch] rebuild script: $REBUILD_SCRIPT"
 
 cd "$REPO_ROOT"
 
-# Initialise from current remote state (avoids a spurious rebuild on first start)
-if ! git fetch "$REMOTE" "$BRANCH" --quiet 2>/dev/null; then
+# Initialise LAST_KNOWN_SHA: restore from state file to catch commits that arrived
+# during an outage; fall back to current origin/main only on first run.
+git fetch "$REMOTE" "$BRANCH" --quiet 2>/dev/null || \
   echo "[dev-stack-watch] initial fetch failed; will retry on next cycle" >&2
-  LAST_KNOWN_SHA="$(git rev-parse HEAD)"
+if [[ -f "$SHA_STATE_FILE" ]]; then
+  LAST_KNOWN_SHA="$(cat "$SHA_STATE_FILE")"
+  echo "[dev-stack-watch] resuming from persisted SHA $LAST_KNOWN_SHA"
 else
-  LAST_KNOWN_SHA="$(git rev-parse "$REMOTE/$BRANCH")"
+  LAST_KNOWN_SHA="$(git rev-parse "$REMOTE/$BRANCH" 2>/dev/null || git rev-parse HEAD)"
+  echo "$LAST_KNOWN_SHA" > "$SHA_STATE_FILE"
 fi
 
 echo "[dev-stack-watch] tracking from $LAST_KNOWN_SHA"
@@ -67,6 +77,7 @@ while true; do
 
   PREV_SHA="$LAST_KNOWN_SHA"
   LAST_KNOWN_SHA="$NEW_SHA"
+  echo "$LAST_KNOWN_SHA" > "$SHA_STATE_FILE"
 
   echo "[dev-stack-watch] triggering rebuild: $PREV_SHA → $NEW_SHA"
   # Never let a rebuild failure crash the watch loop.

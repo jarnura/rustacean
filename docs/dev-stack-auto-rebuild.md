@@ -69,6 +69,11 @@ RestartSec=30
 Environment="COMPOSE_CMD=docker compose --env-file /opt/rustbrain/compose/tailscale.env -f /opt/rustbrain/compose/dev.yml -f /opt/rustbrain/compose/tailscale.yml"
 Environment="POLL_INTERVAL=60"
 
+# Source the compose env-file into the rebuild script's shell so host-port overrides
+# (e.g. CONTROL_API_HOST_PORT=18080, FRONTEND_HOST_PORT=15173) are visible during
+# health checks. docker compose's --env-file only reaches containers, not this shell.
+Environment="COMPOSE_ENV_FILE=/opt/rustbrain/compose/tailscale.env"
+
 # Optional: post GitHub commit status on rebuild completion
 # Environment="GITHUB_TOKEN=ghp_..."
 # Environment="GITHUB_REPO=jarnura/rustbrain"

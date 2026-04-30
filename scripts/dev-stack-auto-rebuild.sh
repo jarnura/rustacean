@@ -65,10 +65,15 @@ print(json.dumps({
 post_gh_status() {
   local state="$1" desc="$2"
   [[ -z "${GITHUB_TOKEN:-}" || -z "${GITHUB_REPO:-}" ]] && return 0
+  local body
+  body="$(python3 -c "
+import json, sys
+print(json.dumps({'state': sys.argv[1], 'description': sys.argv[2], 'context': 'dev-stack/auto-rebuild'}))
+" "$state" "$desc")"
   curl -s -o /dev/null \
     -H "Authorization: token $GITHUB_TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"state\":\"$state\",\"description\":\"$desc\",\"context\":\"dev-stack/auto-rebuild\"}" \
+    -d "$body" \
     "https://api.github.com/repos/${GITHUB_REPO}/statuses/${NEW_SHA}" || true
 }
 

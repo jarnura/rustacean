@@ -1,4 +1,10 @@
-.PHONY: blob-smoke blob-smoke-s3 ingest-smoke
+.PHONY: review-ready blob-smoke blob-smoke-s3 ingest-smoke
+
+# Run all local pre-PR checks: fmt, clippy, test, deny, openapi, frontend (if changed).
+# All steps run even on partial failure so you see the full picture before pushing.
+review-ready:
+	bash scripts/review-ready.sh
+
 
 # Run SSE ingest smoke tests (no Kafka required — uses dev test-publish route).
 #

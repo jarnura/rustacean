@@ -14,7 +14,7 @@ pub struct ProbeResponse {
     get,
     path = "/health",
     responses(
-        (status = 200, description = "Service is alive", body = ProbeResponse)
+        (status = 200, description = "Service is alive and healthy", body = ProbeResponse)
     ),
     tag = "health"
 )]

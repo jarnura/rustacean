@@ -10,6 +10,7 @@ import { z } from "zod";
 import { AppShell, GlobalSuspenseFallback } from "@/components/AppShell";
 import { ApiKeysPage } from "@/pages/ApiKeysPage";
 import { ForgotPasswordPage } from "@/pages/ForgotPasswordPage";
+import { IngestionTheatre } from "@/pages/IngestionTheatre";
 import { LoginPage } from "@/pages/LoginPage";
 import { MembersPage } from "@/pages/MembersPage";
 import { ReposPage } from "@/pages/ReposPage";
@@ -109,6 +110,12 @@ const apiKeysRoute = createRoute({
   component: ApiKeysPage,
 });
 
+const ingestionRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: routes.ingestion,
+  component: IngestionTheatre,
+});
+
 const catchAllRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "$",
@@ -129,6 +136,7 @@ const routeTree = rootRoute.addChildren([
   repoDetailRoute,
   membersRoute,
   apiKeysRoute,
+  ingestionRoute,
   catchAllRoute,
 ]);
 

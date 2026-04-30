@@ -5,7 +5,7 @@
 //! attempt counter) are exercised here via the test-util path that mirrors the
 //! same `build_headers_with_retry` / envelope mutation code path.
 
-use rb_kafka::{testing::InProcessBus, EventEnvelope, KafkaError, RetryPolicy};
+use rb_kafka::{EventEnvelope, KafkaError, RetryPolicy, testing::InProcessBus};
 use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
 
 fn make_event(tenant_id: TenantId) -> EventEnvelope<IngestStatusEvent> {
@@ -59,7 +59,10 @@ async fn publish_retry_under_max_attempts_routes_to_retry_topic() {
     assert_eq!(received.tenant_id, tenant_id);
 
     // Confirm next_attempt is not terminal.
-    assert!(!policy.is_terminal(next_attempt), "attempt {next_attempt} should not be terminal");
+    assert!(
+        !policy.is_terminal(next_attempt),
+        "attempt {next_attempt} should not be terminal"
+    );
 }
 
 /// Test 2: At `max_attempts`, `publish_retry` must return `MaxRetriesExceeded`.

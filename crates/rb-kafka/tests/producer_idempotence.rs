@@ -1,4 +1,4 @@
-use rb_kafka::{testing::InProcessBus, EventEnvelope};
+use rb_kafka::{EventEnvelope, testing::InProcessBus};
 use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
 use uuid::Uuid;
 
@@ -26,12 +26,21 @@ async fn duplicate_event_id_is_deduplicated() {
     let event_id = Uuid::new_v4();
 
     // Same event_id published twice.
-    let report1 = producer.publish("test.idempotent", &[], make_event(tenant_id, event_id)).await.unwrap();
-    let report2 = producer.publish("test.idempotent", &[], make_event(tenant_id, event_id)).await.unwrap();
+    let report1 = producer
+        .publish("test.idempotent", &[], make_event(tenant_id, event_id))
+        .await
+        .unwrap();
+    let report2 = producer
+        .publish("test.idempotent", &[], make_event(tenant_id, event_id))
+        .await
+        .unwrap();
 
     // First delivery has offset 0; duplicate is synthetic (offset = -1).
     assert_eq!(report1.offset, 0);
-    assert_eq!(report2.offset, -1, "duplicate should return synthetic dedup report");
+    assert_eq!(
+        report2.offset, -1,
+        "duplicate should return synthetic dedup report"
+    );
 
     // Only one message delivered to the topic.
     let received = consumer.next().await.unwrap().unwrap();
@@ -49,8 +58,14 @@ async fn distinct_event_ids_both_delivered() {
     let id_b = Uuid::new_v4();
     assert_ne!(id_a, id_b);
 
-    producer.publish("test.distinct", &[], make_event(tenant_id, id_a)).await.unwrap();
-    producer.publish("test.distinct", &[], make_event(tenant_id, id_b)).await.unwrap();
+    producer
+        .publish("test.distinct", &[], make_event(tenant_id, id_a))
+        .await
+        .unwrap();
+    producer
+        .publish("test.distinct", &[], make_event(tenant_id, id_b))
+        .await
+        .unwrap();
 
     let first = consumer.next().await.unwrap().unwrap();
     let second = consumer.next().await.unwrap().unwrap();

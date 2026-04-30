@@ -22,7 +22,9 @@ pub struct DlqRouter {
 impl DlqRouter {
     #[must_use]
     pub fn new(source_topic: impl Into<String>) -> Self {
-        Self { source: source_topic.into() }
+        Self {
+            source: source_topic.into(),
+        }
     }
 
     /// Returns the DLQ topic name for this source topic.
@@ -50,12 +52,18 @@ mod tests {
 
     #[test]
     fn dlq_topic_appends_suffix() {
-        assert_eq!(dlq_topic("rb.ingest.parse.commands"), "rb.ingest.parse.commands.dlq");
+        assert_eq!(
+            dlq_topic("rb.ingest.parse.commands"),
+            "rb.ingest.parse.commands.dlq"
+        );
     }
 
     #[test]
     fn retry_topic_appends_suffix() {
-        assert_eq!(retry_topic("rb.ingest.parse.commands"), "rb.ingest.parse.commands.retry");
+        assert_eq!(
+            retry_topic("rb.ingest.parse.commands"),
+            "rb.ingest.parse.commands.retry"
+        );
     }
 
     #[test]

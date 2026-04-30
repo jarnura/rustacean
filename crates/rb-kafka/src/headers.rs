@@ -7,7 +7,10 @@ pub struct KafkaHeaderInjector(pub OwnedHeaders);
 impl Injector for KafkaHeaderInjector {
     fn set(&mut self, key: &str, value: String) {
         let current = std::mem::replace(&mut self.0, OwnedHeaders::new());
-        self.0 = current.insert(Header { key, value: Some(value.as_bytes()) });
+        self.0 = current.insert(Header {
+            key,
+            value: Some(value.as_bytes()),
+        });
     }
 }
 
@@ -30,7 +33,9 @@ impl Extractor for KafkaHeaderExtractor<'_> {
 /// Returns `true` iff `tp` is a structurally valid W3C traceparent.
 ///
 /// Required format: `{2hex}-{32hex}-{16hex}-{2hex}` (version-traceId-parentId-flags).
-/// Does not enforce the all-zeros prohibition from the spec; that is left to the `OTel` SDK.
+/// Rejects version byte `ff` (W3C §3.2.1 — reserved/invalid).
+/// Does not enforce all-zeros prohibition (§3.2.2/3.2.3); `OTel` SDK behavior on
+/// all-zero ids is implementation-defined and left to the SDK.
 pub fn is_valid_traceparent(tp: &str) -> bool {
     let mut it = tp.splitn(5, '-');
     let version = it.next().unwrap_or("");
@@ -42,6 +47,7 @@ pub fn is_valid_traceparent(tp: &str) -> bool {
         return false;
     }
     is_hex_len(version, 2)
+        && version != "ff"
         && is_hex_len(trace_id, 32)
         && is_hex_len(parent_id, 16)
         && is_hex_len(flags, 2)
@@ -105,5 +111,24 @@ mod tests {
     #[test]
     fn empty_string_rejected() {
         assert!(!is_valid_traceparent(""));
+    }
+
+    #[test]
+    fn version_ff_rejected() {
+        assert!(!is_valid_traceparent(
+            "ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+        ));
+    }
+
+    #[test]
+    fn extractor_key_lookup_is_case_insensitive() {
+        let headers = vec![
+            ("TRACEPARENT".to_owned(), "val".to_owned()),
+            ("Tracestate".to_owned(), "state".to_owned()),
+        ];
+        let ext = KafkaHeaderExtractor(&headers);
+        assert_eq!(ext.get("traceparent"), Some("val"));
+        assert_eq!(ext.get("tracestate"), Some("state"));
+        assert_eq!(ext.get("TRACEPARENT"), Some("val"));
     }
 }

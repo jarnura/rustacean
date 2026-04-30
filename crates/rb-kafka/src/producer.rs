@@ -3,18 +3,18 @@ use std::{marker::PhantomData, str::FromStr as _, time::Duration};
 use metrics::{counter, histogram};
 use prost::Message as ProstMessage;
 use rdkafka::{
+    ClientConfig,
     message::{Header, OwnedHeaders},
     producer::{FutureProducer, FutureRecord},
-    ClientConfig,
 };
 use tracing::instrument;
 
 use crate::{
     config::ProducerCfg,
     envelope::{
-        DeliveryReport, EnvelopeMeta, EventEnvelope, SchemaVersion, TraceContext, HEADER_ATTEMPT,
-        HEADER_BLOB_REF, HEADER_CREATED_AT_MS, HEADER_EVENT_ID, HEADER_PROCESS_AFTER_MS,
-        HEADER_SCHEMA_VERSION, HEADER_TENANT_ID, HEADER_TRACEPARENT, HEADER_TRACESTATE,
+        DeliveryReport, EnvelopeMeta, EventEnvelope, HEADER_ATTEMPT, HEADER_BLOB_REF,
+        HEADER_CREATED_AT_MS, HEADER_EVENT_ID, HEADER_PROCESS_AFTER_MS, HEADER_SCHEMA_VERSION,
+        HEADER_TENANT_ID, HEADER_TRACEPARENT, HEADER_TRACESTATE, SchemaVersion, TraceContext,
     },
     errors::KafkaError,
     headers::KafkaHeaderInjector,
@@ -36,10 +36,16 @@ impl<E: ProstMessage> Producer<E> {
             .set("compression.type", &cfg.compression_type)
             .set("linger.ms", cfg.linger_ms.to_string())
             .set("delivery.timeout.ms", cfg.delivery_timeout_ms.to_string())
-            .set("queue.buffering.max.kbytes", cfg.queue_buffering_max_kbytes.to_string())
+            .set(
+                "queue.buffering.max.kbytes",
+                cfg.queue_buffering_max_kbytes.to_string(),
+            )
             .set("max.in.flight.requests.per.connection", "5")
             .create()?;
-        Ok(Self { inner: producer, _phantom: PhantomData })
+        Ok(Self {
+            inner: producer,
+            _phantom: PhantomData,
+        })
     }
 
     #[instrument(skip(self, envelope), fields(topic, event_id = %envelope.event_id))]
@@ -72,7 +78,11 @@ impl<E: ProstMessage> Producer<E> {
                     (chrono::Utc::now() - created_at).num_milliseconds().max(0) as f64 / 1_000.0;
                 histogram!("rb_kafka_e2e_latency_seconds", "topic" => topic.to_owned())
                     .record(e2e_secs);
-                Ok(DeliveryReport { topic: topic.to_owned(), partition, offset })
+                Ok(DeliveryReport {
+                    topic: topic.to_owned(),
+                    partition,
+                    offset,
+                })
             }
             Err((e, _)) => {
                 counter!(
@@ -130,11 +140,14 @@ impl<E: ProstMessage> Producer<E> {
         )
         .increment(1);
         #[allow(clippy::cast_precision_loss)]
-        let e2e_secs =
-            (chrono::Utc::now() - created_at).num_milliseconds().max(0) as f64 / 1_000.0;
+        let e2e_secs = (chrono::Utc::now() - created_at).num_milliseconds().max(0) as f64 / 1_000.0;
         histogram!("rb_kafka_e2e_latency_seconds", "topic" => topic.to_owned()).record(e2e_secs);
 
-        Ok(DeliveryReport { topic: retry_topic.to_owned(), partition, offset })
+        Ok(DeliveryReport {
+            topic: retry_topic.to_owned(),
+            partition,
+            offset,
+        })
     }
 }
 
@@ -162,22 +175,39 @@ fn build_headers<E: ProstMessage>(envelope: &EventEnvelope<E>) -> OwnedHeaders {
     let created_at_ms_str = envelope.created_at.timestamp_millis().to_string();
 
     let mut h = OwnedHeaders::new();
-    h = h.insert(Header { key: HEADER_TENANT_ID, value: Some(tenant_str.as_bytes()) });
-    h = h.insert(Header { key: HEADER_EVENT_ID, value: Some(event_id_str.as_bytes()) });
+    h = h.insert(Header {
+        key: HEADER_TENANT_ID,
+        value: Some(tenant_str.as_bytes()),
+    });
+    h = h.insert(Header {
+        key: HEADER_EVENT_ID,
+        value: Some(event_id_str.as_bytes()),
+    });
     h = h.insert(Header {
         key: HEADER_SCHEMA_VERSION,
         value: Some(envelope.schema_version.as_str().as_bytes()),
     });
-    h = h.insert(Header { key: HEADER_ATTEMPT, value: Some(attempt_str.as_bytes()) });
+    h = h.insert(Header {
+        key: HEADER_ATTEMPT,
+        value: Some(attempt_str.as_bytes()),
+    });
     h = h.insert(Header {
         key: HEADER_CREATED_AT_MS,
         value: Some(created_at_ms_str.as_bytes()),
     });
 
     if let Some(ref blob_ref) = envelope.blob_ref {
-        h = h.insert(Header { key: HEADER_BLOB_REF, value: Some(blob_ref.as_bytes()) });
+        h = h.insert(Header {
+            key: HEADER_BLOB_REF,
+            value: Some(blob_ref.as_bytes()),
+        });
     }
 
+    // Explicit trace_context wins over the active OTel span: it carries an upstream
+    // traceparent that a consumer wants to forward, so we write it verbatim and skip
+    // the OTel inject to avoid a duplicate traceparent header (the first header wins
+    // on decode via iter().find()).  When no explicit context is set, OTel inject
+    // captures the current producer span (no-op if no propagator is installed).
     if let Some(ref tc) = envelope.trace_context {
         if !tc.traceparent.is_empty() {
             h = h.insert(Header {
@@ -191,14 +221,14 @@ fn build_headers<E: ProstMessage>(envelope: &EventEnvelope<E>) -> OwnedHeaders {
                 value: Some(tc.tracestate.as_bytes()),
             });
         }
+        h
+    } else {
+        let mut injector = KafkaHeaderInjector(h);
+        opentelemetry::global::get_text_map_propagator(|prop| {
+            prop.inject(&mut injector);
+        });
+        injector.0
     }
-
-    // Inject current OTel context (no-op if no propagator is installed).
-    let mut injector = KafkaHeaderInjector(h);
-    opentelemetry::global::get_text_map_propagator(|prop| {
-        prop.inject(&mut injector);
-    });
-    injector.0
 }
 
 /// Decode an [`EventEnvelope<E>`] from raw Kafka message bytes + flattened headers.
@@ -210,29 +240,37 @@ pub fn decode_envelope<E: ProstMessage + Default>(
     offset: i64,
 ) -> Result<EventEnvelope<E>, KafkaError> {
     let get = |key: &'static str| -> Option<String> {
-        headers.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone())
+        headers
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
     };
 
-    let tenant_str =
-        get(HEADER_TENANT_ID).ok_or(KafkaError::MissingHeader(HEADER_TENANT_ID))?;
-    let tenant_id = tenant_str
-        .parse::<rb_schemas::TenantId>()
-        .map_err(|e| KafkaError::InvalidHeaderUuid { header: HEADER_TENANT_ID, source: e })?;
+    let tenant_str = get(HEADER_TENANT_ID).ok_or(KafkaError::MissingHeader(HEADER_TENANT_ID))?;
+    let tenant_id =
+        tenant_str
+            .parse::<rb_schemas::TenantId>()
+            .map_err(|e| KafkaError::InvalidHeaderUuid {
+                header: HEADER_TENANT_ID,
+                source: e,
+            })?;
 
-    let event_id_str =
-        get(HEADER_EVENT_ID).ok_or(KafkaError::MissingHeader(HEADER_EVENT_ID))?;
-    let event_id = event_id_str
-        .parse::<uuid::Uuid>()
-        .map_err(|e| KafkaError::InvalidHeaderUuid { header: HEADER_EVENT_ID, source: e })?;
+    let event_id_str = get(HEADER_EVENT_ID).ok_or(KafkaError::MissingHeader(HEADER_EVENT_ID))?;
+    let event_id =
+        event_id_str
+            .parse::<uuid::Uuid>()
+            .map_err(|e| KafkaError::InvalidHeaderUuid {
+                header: HEADER_EVENT_ID,
+                source: e,
+            })?;
 
     let schema_str =
         get(HEADER_SCHEMA_VERSION).ok_or(KafkaError::MissingHeader(HEADER_SCHEMA_VERSION))?;
-    let schema_version = SchemaVersion::from_str(&schema_str).map_err(|e| {
-        KafkaError::SchemaMismatch {
+    let schema_version =
+        SchemaVersion::from_str(&schema_str).map_err(|e| KafkaError::SchemaMismatch {
             expected: SchemaVersion::V1.as_str().to_owned(),
             got: e,
-        }
-    })?;
+        })?;
 
     let blob_ref = get(HEADER_BLOB_REF);
     let traceparent = get(HEADER_TRACEPARENT).unwrap_or_default();
@@ -240,7 +278,10 @@ pub fn decode_envelope<E: ProstMessage + Default>(
     let trace_context = if traceparent.is_empty() {
         None
     } else {
-        Some(TraceContext { traceparent, tracestate })
+        Some(TraceContext {
+            traceparent,
+            tracestate,
+        })
     };
 
     let attempt = get(HEADER_ATTEMPT)
@@ -261,8 +302,7 @@ pub fn decode_envelope<E: ProstMessage + Default>(
         }
     }
 
-    let payload_msg =
-        E::decode(payload).map_err(|e| KafkaError::Deserialization(e.to_string()))?;
+    let payload_msg = E::decode(payload).map_err(|e| KafkaError::Deserialization(e.to_string()))?;
 
     let created_at = get(HEADER_CREATED_AT_MS)
         .and_then(|s| s.parse::<i64>().ok())
@@ -277,6 +317,11 @@ pub fn decode_envelope<E: ProstMessage + Default>(
         blob_ref,
         created_at,
         payload: payload_msg,
-        _meta: EnvelopeMeta { topic: topic.to_owned(), partition, offset, attempt },
+        _meta: EnvelopeMeta {
+            topic: topic.to_owned(),
+            partition,
+            offset,
+            attempt,
+        },
     })
 }

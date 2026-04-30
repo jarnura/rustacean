@@ -4,9 +4,9 @@ use futures::StreamExt as _;
 use metrics::{counter, gauge, histogram};
 use prost::Message as ProstMessage;
 use rdkafka::{
+    ClientConfig, TopicPartitionList,
     consumer::{CommitMode, Consumer as RdConsumer, StreamConsumer},
     message::{Header, Headers as RdHeaders, Message as RdMessage},
-    ClientConfig, TopicPartitionList,
 };
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
         HEADER_TRACEPARENT, HEADER_TRACESTATE,
     },
     errors::KafkaError,
-    headers::{is_valid_traceparent, KafkaHeaderExtractor},
+    headers::{KafkaHeaderExtractor, is_valid_traceparent},
     producer::decode_envelope,
 };
 
@@ -37,8 +37,14 @@ impl<E: ProstMessage + Default> Consumer<E> {
             .set("enable.auto.commit", cfg.enable_auto_commit.to_string())
             .set("isolation.level", &cfg.isolation_level)
             .set("auto.offset.reset", &cfg.auto_offset_reset)
-            .set("max.poll.interval.ms", cfg.max_poll_interval.as_millis().to_string())
-            .set("session.timeout.ms", cfg.session_timeout.as_millis().to_string())
+            .set(
+                "max.poll.interval.ms",
+                cfg.max_poll_interval.as_millis().to_string(),
+            )
+            .set(
+                "session.timeout.ms",
+                cfg.session_timeout.as_millis().to_string(),
+            )
             .create()?;
 
         // DLQ delivery is best-effort: acks=1 avoids blocking the consume loop on
@@ -75,11 +81,10 @@ impl<E: ProstMessage + Default> Consumer<E> {
 
                 // Emit consumer lag gauge if watermark info is available.
                 // rdkafka StreamConsumer exposes fetch_watermarks synchronously.
-                if let Ok((_, high)) = self.inner.fetch_watermarks(
-                    &topic,
-                    partition,
-                    Duration::from_millis(100),
-                ) {
+                if let Ok((_, high)) =
+                    self.inner
+                        .fetch_watermarks(&topic, partition, Duration::from_millis(100))
+                {
                     #[allow(clippy::cast_precision_loss)]
                     let lag = (high - offset).max(0) as f64;
                     gauge!(
@@ -96,10 +101,8 @@ impl<E: ProstMessage + Default> Consumer<E> {
                 // any instrumented sub-spans are linked to the upstream trace.
                 let _cx_guard = {
                     let extractor = KafkaHeaderExtractor(&headers);
-                    opentelemetry::global::get_text_map_propagator(|prop| {
-                        prop.extract(&extractor)
-                    })
-                    .attach()
+                    opentelemetry::global::get_text_map_propagator(|prop| prop.extract(&extractor))
+                        .attach()
                 };
                 let consume_span = tracing::info_span!(
                     "kafka.consume",
@@ -118,8 +121,7 @@ impl<E: ProstMessage + Default> Consumer<E> {
                 let result = match result {
                     Ok(mut env) => {
                         let malformed_tp = env.trace_context.as_ref().and_then(|tc| {
-                            if !tc.traceparent.is_empty()
-                                && !is_valid_traceparent(&tc.traceparent)
+                            if !tc.traceparent.is_empty() && !is_valid_traceparent(&tc.traceparent)
                             {
                                 Some(tc.traceparent.clone())
                             } else {
@@ -128,6 +130,8 @@ impl<E: ProstMessage + Default> Consumer<E> {
                         });
                         if let Some(tp) = malformed_tp {
                             env.trace_context = None;
+                            // Best-effort: losing a DLQ record is preferable to stalling;
+                            // rb_kafka_dlq_total drops are caught by ops alerts.
                             let _ = self.nack_to_dlq(&env, "invalid-traceparent").await;
                             let _ = self.commit(&env).await;
                             counter!(
@@ -209,18 +213,32 @@ impl<E: ProstMessage + Default> Consumer<E> {
         let created_at_ms_str = env.created_at.timestamp_millis().to_string();
 
         let mut headers = rdkafka::message::OwnedHeaders::new()
-            .insert(Header { key: HEADER_TENANT_ID, value: Some(tenant_str.as_bytes()) })
-            .insert(Header { key: HEADER_EVENT_ID, value: Some(event_id_str.as_bytes()) })
-            .insert(Header { key: HEADER_SCHEMA_VERSION, value: Some(schema_str.as_bytes()) })
-            .insert(Header { key: HEADER_ATTEMPT, value: Some(attempt_str.as_bytes()) })
+            .insert(Header {
+                key: HEADER_TENANT_ID,
+                value: Some(tenant_str.as_bytes()),
+            })
+            .insert(Header {
+                key: HEADER_EVENT_ID,
+                value: Some(event_id_str.as_bytes()),
+            })
+            .insert(Header {
+                key: HEADER_SCHEMA_VERSION,
+                value: Some(schema_str.as_bytes()),
+            })
+            .insert(Header {
+                key: HEADER_ATTEMPT,
+                value: Some(attempt_str.as_bytes()),
+            })
             .insert(Header {
                 key: HEADER_CREATED_AT_MS,
                 value: Some(created_at_ms_str.as_bytes()),
             });
 
         if let Some(ref blob_ref) = env.blob_ref {
-            headers = headers
-                .insert(Header { key: HEADER_BLOB_REF, value: Some(blob_ref.as_bytes()) });
+            headers = headers.insert(Header {
+                key: HEADER_BLOB_REF,
+                value: Some(blob_ref.as_bytes()),
+            });
         }
         if let Some(ref tc) = env.trace_context {
             if !tc.traceparent.is_empty() {
@@ -237,8 +255,14 @@ impl<E: ProstMessage + Default> Consumer<E> {
             }
         }
         headers = headers
-            .insert(Header { key: HEADER_DLQ_REASON, value: Some(reason.as_bytes()) })
-            .insert(Header { key: HEADER_DLQ_AT, value: Some(dlq_at.as_bytes()) });
+            .insert(Header {
+                key: HEADER_DLQ_REASON,
+                value: Some(reason.as_bytes()),
+            })
+            .insert(Header {
+                key: HEADER_DLQ_AT,
+                value: Some(dlq_at.as_bytes()),
+            });
 
         let payload = env.payload.encode_to_vec();
         let key = env.tenant_id.to_string();
@@ -268,7 +292,9 @@ fn extract_headers(h: Option<&rdkafka::message::BorrowedHeaders>) -> Vec<(String
     bh.iter()
         .filter_map(|header| {
             let key = header.key.to_owned();
-            let value = std::str::from_utf8(header.value.unwrap_or(&[])).ok()?.to_owned();
+            let value = std::str::from_utf8(header.value.unwrap_or(&[]))
+                .ok()?
+                .to_owned();
             Some((key, value))
         })
         .collect()

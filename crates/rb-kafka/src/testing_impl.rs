@@ -13,7 +13,7 @@ use std::{
 
 use metrics::{counter, histogram};
 use prost::Message as ProstMessage;
-use tokio::sync::{broadcast, Mutex as AsyncMutex};
+use tokio::sync::{Mutex as AsyncMutex, broadcast};
 use uuid::Uuid;
 
 use crate::{
@@ -24,9 +24,18 @@ use crate::{
         HEADER_TRACESTATE,
     },
     errors::KafkaError,
-    headers::{is_valid_traceparent, KafkaHeaderExtractor},
+    headers::{KafkaHeaderExtractor, is_valid_traceparent},
     producer::decode_envelope,
 };
+
+/// `OTel` `Injector` backed by a `Vec<(String, String)>` for use in the test double.
+struct VecInjector(Vec<(String, String)>);
+
+impl opentelemetry::propagation::Injector for VecInjector {
+    fn set(&mut self, key: &str, value: String) {
+        self.0.push((key.to_owned(), value));
+    }
+}
 
 /// A raw Kafka-message-shaped payload passed through the in-process bus.
 #[derive(Clone, Debug)]
@@ -129,12 +138,25 @@ impl<E: ProstMessage> TestProducer<E> {
         {
             let mut seen = self.seen.lock().expect("seen lock poisoned");
             if !seen.insert(envelope.event_id) {
-                return Ok(DeliveryReport { topic: topic.to_owned(), partition: 0, offset: -1 });
+                return Ok(DeliveryReport {
+                    topic: topic.to_owned(),
+                    partition: 0,
+                    offset: -1,
+                });
             }
         }
 
         let created_at = envelope.created_at;
-        let headers = envelope_to_headers(&envelope);
+        // Mirror production build_headers: explicit trace_context wins; otherwise inject
+        // the active OTel span so test-double headers stay wire-compatible with prod.
+        let mut headers = envelope_to_headers(&envelope);
+        if envelope.trace_context.is_none() {
+            let mut injector = VecInjector(Vec::new());
+            opentelemetry::global::get_text_map_propagator(|prop| {
+                prop.inject(&mut injector);
+            });
+            headers.extend(injector.0);
+        }
         let payload = envelope.payload.encode_to_vec();
 
         self.bus.publish_raw(RawMessage {
@@ -152,11 +174,14 @@ impl<E: ProstMessage> TestProducer<E> {
         )
         .increment(1);
         #[allow(clippy::cast_precision_loss)]
-        let e2e_secs =
-            (chrono::Utc::now() - created_at).num_milliseconds().max(0) as f64 / 1_000.0;
+        let e2e_secs = (chrono::Utc::now() - created_at).num_milliseconds().max(0) as f64 / 1_000.0;
         histogram!("rb_kafka_e2e_latency_seconds", "topic" => topic.to_owned()).record(e2e_secs);
 
-        Ok(DeliveryReport { topic: topic.to_owned(), partition: 0, offset: 0 })
+        Ok(DeliveryReport {
+            topic: topic.to_owned(),
+            partition: 0,
+            offset: 0,
+        })
     }
 }
 
@@ -181,10 +206,8 @@ impl<E: ProstMessage + Default> TestConsumer<E> {
                 // Seed consume span (no-op when no OTel propagator is installed in tests).
                 let _cx_guard = {
                     let extractor = KafkaHeaderExtractor(&msg.headers);
-                    opentelemetry::global::get_text_map_propagator(|prop| {
-                        prop.extract(&extractor)
-                    })
-                    .attach()
+                    opentelemetry::global::get_text_map_propagator(|prop| prop.extract(&extractor))
+                        .attach()
                 };
 
                 let result = decode_envelope(&msg.payload, &msg.headers, &msg.topic, 0, 0);
@@ -195,8 +218,7 @@ impl<E: ProstMessage + Default> TestConsumer<E> {
                 let result = match result {
                     Ok(mut env) => {
                         let malformed_tp = env.trace_context.as_ref().and_then(|tc| {
-                            if !tc.traceparent.is_empty()
-                                && !is_valid_traceparent(&tc.traceparent)
+                            if !tc.traceparent.is_empty() && !is_valid_traceparent(&tc.traceparent)
                             {
                                 Some(tc.traceparent.clone())
                             } else {
@@ -253,9 +275,7 @@ impl<E: ProstMessage + Default> TestConsumer<E> {
                 Some(result)
             }
             Err(broadcast::error::RecvError::Closed) => None,
-            Err(broadcast::error::RecvError::Lagged(_)) => {
-                Some(Err(KafkaError::ConsumerLag))
-            }
+            Err(broadcast::error::RecvError::Lagged(_)) => Some(Err(KafkaError::ConsumerLag)),
         }
     }
 
@@ -275,7 +295,10 @@ impl<E: ProstMessage + Default> TestConsumer<E> {
 
         let mut headers = envelope_to_headers(env);
         headers.push((HEADER_DLQ_REASON.to_owned(), reason.to_owned()));
-        headers.push((HEADER_DLQ_AT.to_owned(), Utc::now().timestamp_millis().to_string()));
+        headers.push((
+            HEADER_DLQ_AT.to_owned(),
+            Utc::now().timestamp_millis().to_string(),
+        ));
 
         let payload = env.payload.encode_to_vec();
         let key = env.tenant_id.to_string().into_bytes();
@@ -306,9 +329,15 @@ fn envelope_to_headers<E: ProstMessage>(env: &EventEnvelope<E>) -> Vec<(String, 
     let mut h = vec![
         (HEADER_TENANT_ID.to_owned(), env.tenant_id.to_string()),
         (HEADER_EVENT_ID.to_owned(), env.event_id.to_string()),
-        (HEADER_SCHEMA_VERSION.to_owned(), env.schema_version.as_str().to_owned()),
+        (
+            HEADER_SCHEMA_VERSION.to_owned(),
+            env.schema_version.as_str().to_owned(),
+        ),
         (HEADER_ATTEMPT.to_owned(), env._meta.attempt.to_string()),
-        (HEADER_CREATED_AT_MS.to_owned(), env.created_at.timestamp_millis().to_string()),
+        (
+            HEADER_CREATED_AT_MS.to_owned(),
+            env.created_at.timestamp_millis().to_string(),
+        ),
     ];
     if let Some(ref blob) = env.blob_ref {
         h.push((HEADER_BLOB_REF.to_owned(), blob.clone()));

@@ -1,4 +1,4 @@
-use rb_kafka::{dlq_topic, testing::InProcessBus, EventEnvelope, KafkaError, TraceContext};
+use rb_kafka::{EventEnvelope, KafkaError, TraceContext, dlq_topic, testing::InProcessBus};
 use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
 
 fn make_event(tenant_id: TenantId, seq: u32) -> EventEnvelope<IngestStatusEvent> {
@@ -33,7 +33,9 @@ async fn traceparent_survives_round_trip() {
     producer.publish("test.trace", &[], env).await.unwrap();
 
     let received = consumer.next().await.unwrap().unwrap();
-    let tc = received.trace_context.expect("trace context must survive round-trip");
+    let tc = received
+        .trace_context
+        .expect("trace context must survive round-trip");
     assert_eq!(tc.traceparent, traceparent, "traceparent must match");
     assert_eq!(tc.tracestate, tracestate, "tracestate must match");
 }
@@ -78,7 +80,10 @@ async fn trace_ids_are_distinct_across_messages() {
     for (i, tc) in contexts.into_iter().enumerate() {
         #[allow(clippy::cast_possible_truncation)]
         let env = make_event(tenant_id, i as u32).with_trace_context(tc);
-        producer.publish("test.multi_trace", &[], env).await.unwrap();
+        producer
+            .publish("test.multi_trace", &[], env)
+            .await
+            .unwrap();
     }
 
     let msg_a = consumer.next().await.unwrap().unwrap();
@@ -86,7 +91,10 @@ async fn trace_ids_are_distinct_across_messages() {
 
     let tp_a = msg_a.trace_context.unwrap().traceparent;
     let tp_b = msg_b.trace_context.unwrap().traceparent;
-    assert_ne!(tp_a, tp_b, "distinct messages must carry distinct trace contexts");
+    assert_ne!(
+        tp_a, tp_b,
+        "distinct messages must carry distinct trace contexts"
+    );
 }
 
 #[tokio::test]
@@ -105,7 +113,10 @@ async fn malformed_traceparent_is_dlqd_and_returns_error() {
     });
     let original_event_id = env.event_id;
 
-    producer.publish("test.malformed_trace", &[], env).await.unwrap();
+    producer
+        .publish("test.malformed_trace", &[], env)
+        .await
+        .unwrap();
 
     let result = consumer.next().await.unwrap();
     assert!(
@@ -115,7 +126,10 @@ async fn malformed_traceparent_is_dlqd_and_returns_error() {
 
     // Message must land on the DLQ (trace_context stripped so no re-validation loop).
     let dlq_msg = dlq_consumer.next().await.unwrap().unwrap();
-    assert_eq!(dlq_msg.event_id, original_event_id, "DLQ must receive the original event");
+    assert_eq!(
+        dlq_msg.event_id, original_event_id,
+        "DLQ must receive the original event"
+    );
     assert!(
         dlq_msg.trace_context.is_none(),
         "DLQ message must have trace_context stripped to prevent re-validation"
@@ -135,7 +149,10 @@ async fn valid_message_after_malformed_is_processed_normally() {
         traceparent: "bad".to_owned(),
         tracestate: String::new(),
     });
-    producer.publish("test.mixed_trace", &[], bad_env).await.unwrap();
+    producer
+        .publish("test.mixed_trace", &[], bad_env)
+        .await
+        .unwrap();
 
     // Second message: valid traceparent.
     let good_tp = "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01";
@@ -144,7 +161,10 @@ async fn valid_message_after_malformed_is_processed_normally() {
         tracestate: String::new(),
     });
     let good_event_id = good_env.event_id;
-    producer.publish("test.mixed_trace", &[], good_env).await.unwrap();
+    producer
+        .publish("test.mixed_trace", &[], good_env)
+        .await
+        .unwrap();
 
     // First consume: returns error for malformed.
     let first = consumer.next().await.unwrap();

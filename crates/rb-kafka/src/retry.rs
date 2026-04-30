@@ -17,7 +17,9 @@ pub struct RetryPolicy {
 
 impl Default for RetryPolicy {
     fn default() -> Self {
-        Self { max_attempts: MAX_ATTEMPTS }
+        Self {
+            max_attempts: MAX_ATTEMPTS,
+        }
     }
 }
 
@@ -29,7 +31,9 @@ impl RetryPolicy {
         if attempt >= self.max_attempts {
             return None;
         }
-        let idx = (attempt as usize).saturating_sub(1).min(BACKOFF_SCHEDULE.len() - 1);
+        let idx = (attempt as usize)
+            .saturating_sub(1)
+            .min(BACKOFF_SCHEDULE.len() - 1);
         Some(BACKOFF_SCHEDULE[idx])
     }
 

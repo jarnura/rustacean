@@ -983,8 +983,10 @@ dependencies = [
  "rb-auth",
  "rb-email",
  "rb-github",
+ "rb-kafka",
  "rb-schemas",
  "rb-secrets",
+ "rb-sse",
  "rb-storage-pg",
  "rb-tenant",
  "rb-tracing",
@@ -3342,6 +3344,26 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "zeroize",
+]
+
+[[package]]
+name = "rb-sse"
+version = "0.1.0"
+dependencies = [
+ "axum 0.8.9",
+ "chrono",
+ "dashmap",
+ "futures",
+ "metrics",
+ "metrics-util",
+ "rb-schemas",
+ "rb-tenant",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

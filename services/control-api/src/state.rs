@@ -3,6 +3,7 @@ use std::sync::Arc;
 use rb_auth::{LoginRateLimiter, PasswordHasher};
 use rb_email::EmailSender;
 use rb_github::GhApp;
+use rb_sse::EventBus;
 use sqlx::PgPool;
 
 use crate::config::Config;
@@ -18,4 +19,6 @@ pub struct AppState {
     /// GitHub App handle. `None` when `RB_GH_APP_ID` / `RB_GH_APP_PRIVATE_KEY`
     /// are not configured; GitHub routes return 503 in that case.
     pub gh: Option<Arc<GhApp>>,
+    /// SSE event bus — per-tenant live event fan-out for `GET /v1/ingest/events`.
+    pub sse_bus: Arc<EventBus>,
 }

@@ -28,6 +28,14 @@ pub struct Config {
     /// `RB_GH_APP_WEBHOOK_SECRET` — shared secret for HMAC-SHA256 webhook
     /// signature verification.
     pub gh_app_webhook_secret: Option<String>,
+
+    // --- Kafka / SSE (REQ-DP-08) ---
+    /// `KAFKA_BOOTSTRAP_SERVERS` — broker list for the ingest consumer.
+    /// Defaults to `kafka:9092` (dev compose alias).
+    pub kafka_bootstrap_servers: String,
+    /// `RB_DEV_TEST_ROUTES=1` — enable `POST /v1/ingest/test-publish` route.
+    /// Must not be set in production.
+    pub dev_test_routes: bool,
 }
 
 impl Config {
@@ -84,6 +92,10 @@ impl Config {
             gh_app_webhook_secret: env::var("RB_GH_APP_WEBHOOK_SECRET")
                 .ok()
                 .filter(|s| !s.is_empty()),
+            kafka_bootstrap_servers: env::var("KAFKA_BOOTSTRAP_SERVERS")
+                .unwrap_or_else(|_| "kafka:9092".to_owned()),
+            dev_test_routes: env::var("RB_DEV_TEST_ROUTES")
+                .map_or(false, |v| v == "1" || v.eq_ignore_ascii_case("true")),
         })
     }
 
@@ -108,6 +120,8 @@ impl Config {
             gh_app_id: None,
             gh_app_private_key_b64: None,
             gh_app_webhook_secret: None,
+            kafka_bootstrap_servers: "localhost:9092".to_owned(),
+            dev_test_routes: false,
         }
     }
 }

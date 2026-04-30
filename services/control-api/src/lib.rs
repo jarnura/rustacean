@@ -1,5 +1,6 @@
 mod config;
 mod error;
+pub mod ingest_consumer;
 mod middleware;
 mod openapi;
 mod routes;

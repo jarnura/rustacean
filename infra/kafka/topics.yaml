@@ -1,4 +1,8 @@
 topics:
+  # replication_factor: 1 throughout — correct for single-broker local/CI
+  # environments. Raise to 3 (min.insync.replicas=2) before promoting to
+  # a multi-broker production cluster.
+
   # ── Base command topics (8) ───────────────────────────────────────────────
   - name: rb.ingest.clone.commands
     partitions: 6

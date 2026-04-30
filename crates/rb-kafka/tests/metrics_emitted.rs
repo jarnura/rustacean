@@ -63,11 +63,12 @@ async fn all_required_metric_names_are_emitted() {
         .map(|(composite_key, _, _, _)| composite_key.key().name().to_owned())
         .collect();
 
-    // All 6 required names must appear at least once.
+    // All required metric names must appear at least once.
     let required = [
         "rb_kafka_messages_total",
         "rb_kafka_consume_lag_seconds",
         "rb_kafka_dlq_total",
+        "rb_kafka_e2e_latency_seconds",
     ];
 
     for name in &required {

@@ -11,6 +11,7 @@ pub const HEADER_ATTEMPT: &str = "x-rb-attempt";
 pub const HEADER_TRACEPARENT: &str = "traceparent";
 pub const HEADER_TRACESTATE: &str = "tracestate";
 pub const HEADER_PROCESS_AFTER_MS: &str = "x-rb-process-after-ms";
+pub const HEADER_CREATED_AT_MS: &str = "x-rb-created-at-ms";
 pub const HEADER_DLQ_REASON: &str = "x-rb-dlq-reason";
 pub const HEADER_DLQ_AT: &str = "x-rb-dlq-at";
 

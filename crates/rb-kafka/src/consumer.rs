@@ -13,9 +13,9 @@ use crate::{
     config::ConsumerCfg,
     dlq::dlq_topic,
     envelope::{
-        EventEnvelope, HEADER_ATTEMPT, HEADER_BLOB_REF, HEADER_DLQ_AT, HEADER_DLQ_REASON,
-        HEADER_EVENT_ID, HEADER_SCHEMA_VERSION, HEADER_TENANT_ID, HEADER_TRACEPARENT,
-        HEADER_TRACESTATE,
+        EventEnvelope, HEADER_ATTEMPT, HEADER_BLOB_REF, HEADER_CREATED_AT_MS, HEADER_DLQ_AT,
+        HEADER_DLQ_REASON, HEADER_EVENT_ID, HEADER_SCHEMA_VERSION, HEADER_TENANT_ID,
+        HEADER_TRACEPARENT, HEADER_TRACESTATE,
     },
     errors::KafkaError,
     producer::decode_envelope,
@@ -40,6 +40,9 @@ impl<E: ProstMessage + Default> Consumer<E> {
             .set("session.timeout.ms", cfg.session_timeout.as_millis().to_string())
             .create()?;
 
+        // DLQ delivery is best-effort: acks=1 avoids blocking the consume loop on
+        // broker unavailability. Losing a DLQ record is preferable to stalling the
+        // pipeline; ops alerts on rb_kafka_dlq_total drops catch silent failures.
         let dlq_producer = ClientConfig::new()
             .set("bootstrap.servers", &cfg.bootstrap_servers)
             .set("acks", "1")
@@ -149,12 +152,17 @@ impl<E: ProstMessage + Default> Consumer<E> {
         let event_id_str = env.event_id.to_string();
         let attempt_str = env._meta.attempt.to_string();
         let schema_str = env.schema_version.as_str();
+        let created_at_ms_str = env.created_at.timestamp_millis().to_string();
 
         let mut headers = rdkafka::message::OwnedHeaders::new()
             .insert(Header { key: HEADER_TENANT_ID, value: Some(tenant_str.as_bytes()) })
             .insert(Header { key: HEADER_EVENT_ID, value: Some(event_id_str.as_bytes()) })
             .insert(Header { key: HEADER_SCHEMA_VERSION, value: Some(schema_str.as_bytes()) })
-            .insert(Header { key: HEADER_ATTEMPT, value: Some(attempt_str.as_bytes()) });
+            .insert(Header { key: HEADER_ATTEMPT, value: Some(attempt_str.as_bytes()) })
+            .insert(Header {
+                key: HEADER_CREATED_AT_MS,
+                value: Some(created_at_ms_str.as_bytes()),
+            });
 
         if let Some(ref blob_ref) = env.blob_ref {
             headers = headers

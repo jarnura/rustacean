@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, str::FromStr as _, time::Duration};
 
 use metrics::{counter, histogram};
+use tracing::Instrument as _;
 use prost::Message as ProstMessage;
 use rdkafka::{
     ClientConfig,
@@ -64,17 +65,24 @@ impl<E: ProstMessage> Producer<E> {
             "rb.event_id" = %envelope.event_id,
             "rb.schema_version" = envelope.schema_version.as_str(),
         );
-        let _enter = produce_span.enter();
         let created_at = envelope.created_at;
-        let headers = build_headers(&envelope);
-        let payload = envelope.payload.encode_to_vec();
+        // in_scope: span active during synchronous header injection so the OTel
+        // propagator captures produce_span context into the Kafka traceparent header.
+        let (headers, payload) = produce_span.in_scope(|| {
+            (build_headers(&envelope), envelope.payload.encode_to_vec())
+        });
 
         let record = FutureRecord::to(topic)
             .key(key)
             .payload(payload.as_slice())
             .headers(headers);
 
-        match self.inner.send(record, Duration::from_secs(30)).await {
+        match self
+            .inner
+            .send(record, Duration::from_secs(30))
+            .instrument(produce_span)
+            .await
+        {
             Ok((partition, offset)) => {
                 counter!(
                     "rb_kafka_messages_total",

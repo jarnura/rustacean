@@ -121,9 +121,22 @@ impl<E: ProstMessage + Default> Consumer<E> {
                     "rb.schema_version" = tracing::field::Empty,
                     "rb.attempt" = tracing::field::Empty,
                 );
-                let _enter = consume_span.enter();
+                // Scoped entry: span active only for the synchronous decode; guard
+                // drops at block exit so it is never held across an .await point.
+                let result = {
+                    let _enter = consume_span.enter();
+                    decode_envelope(payload, &headers, &topic, partition, offset)
+                };
 
-                let result = decode_envelope(payload, &headers, &topic, partition, offset);
+                // Record §9.3 attributes immediately after decode so all exit paths,
+                // including the malformed-traceparent early return, carry envelope
+                // attributes on the span.  span.record() works without the span entered.
+                if let Ok(ref env) = result {
+                    consume_span.record("rb.tenant_id", env.tenant_id.to_string().as_str());
+                    consume_span.record("rb.event_id", env.event_id.to_string().as_str());
+                    consume_span.record("rb.schema_version", env.schema_version.as_str());
+                    consume_span.record("rb.attempt", env._meta.attempt);
+                }
 
                 // Malformed traceparent: DLQ immediately and surface the error.
                 // trace_context is cleared before nack so the DLQ record doesn't
@@ -157,15 +170,6 @@ impl<E: ProstMessage + Default> Consumer<E> {
                     }
                     Err(e) => Err(e),
                 };
-
-                // Record ADR-006 §9.3 envelope attributes on the consume span now that
-                // the envelope is decoded and the malformed-traceparent path is past.
-                if let Ok(ref env) = result {
-                    consume_span.record("rb.tenant_id", env.tenant_id.to_string().as_str());
-                    consume_span.record("rb.event_id", env.event_id.to_string().as_str());
-                    consume_span.record("rb.schema_version", env.schema_version.as_str());
-                    consume_span.record("rb.attempt", env._meta.attempt);
-                }
 
                 match &result {
                     Ok(env) => {

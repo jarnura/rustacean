@@ -104,12 +104,22 @@ impl<E: ProstMessage + Default> Consumer<E> {
                     opentelemetry::global::get_text_map_propagator(|prop| prop.extract(&extractor))
                         .attach()
                 };
+                let key_str = m
+                    .key()
+                    .map(|k| String::from_utf8_lossy(k).into_owned())
+                    .unwrap_or_default();
                 let consume_span = tracing::info_span!(
                     "kafka.consume",
                     "otel.kind" = "CONSUMER",
-                    topic = %topic,
-                    partition,
-                    offset,
+                    "messaging.system" = "kafka",
+                    "messaging.destination" = %topic,
+                    "messaging.kafka.partition" = partition,
+                    "messaging.kafka.offset" = offset,
+                    "messaging.kafka.message_key" = %key_str,
+                    "rb.tenant_id" = tracing::field::Empty,
+                    "rb.event_id" = tracing::field::Empty,
+                    "rb.schema_version" = tracing::field::Empty,
+                    "rb.attempt" = tracing::field::Empty,
                 );
                 let _enter = consume_span.enter();
 
@@ -147,6 +157,15 @@ impl<E: ProstMessage + Default> Consumer<E> {
                     }
                     Err(e) => Err(e),
                 };
+
+                // Record ADR-006 §9.3 envelope attributes on the consume span now that
+                // the envelope is decoded and the malformed-traceparent path is past.
+                if let Ok(ref env) = result {
+                    consume_span.record("rb.tenant_id", env.tenant_id.to_string().as_str());
+                    consume_span.record("rb.event_id", env.event_id.to_string().as_str());
+                    consume_span.record("rb.schema_version", env.schema_version.as_str());
+                    consume_span.record("rb.attempt", env._meta.attempt);
+                }
 
                 match &result {
                     Ok(env) => {

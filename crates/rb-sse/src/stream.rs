@@ -7,8 +7,8 @@ use std::{
 };
 
 use axum::response::{
-    sse::{Event, KeepAlive, Sse},
     IntoResponse,
+    sse::{Event, KeepAlive, Sse},
 };
 use futures::Stream;
 use rb_schemas::TenantId;
@@ -120,32 +120,39 @@ fn build_inner_stream(
         done: bool,
     }
 
-    let stream = futures::stream::unfold(State { replay, rx, done: false }, |mut s| async move {
-        use tokio::sync::broadcast::error::RecvError;
+    let stream = futures::stream::unfold(
+        State {
+            replay,
+            rx,
+            done: false,
+        },
+        |mut s| async move {
+            use tokio::sync::broadcast::error::RecvError;
 
-        if s.done {
-            return None;
-        }
-
-        // Phase 1 — replay
-        if let Some(env) = s.replay.pop_front() {
-            return Some((Ok(env.to_axum_event()), s));
-        }
-
-        // Phase 2 — live
-        match s.rx.recv().await {
-            Ok(env) => Some((Ok(env.to_axum_event()), s)),
-
-            Err(RecvError::Lagged(n)) => {
-                // Slow client fell behind. Emit advisory, then close next poll.
-                metrics::counter!("rb_sse_dropped_total", "reason" => "lagged").increment(n);
-                s.done = true;
-                Some((Ok(SseEnvelope::stream_reset().to_axum_event()), s))
+            if s.done {
+                return None;
             }
 
-            Err(RecvError::Closed) => None,
-        }
-    });
+            // Phase 1 — replay
+            if let Some(env) = s.replay.pop_front() {
+                return Some((Ok(env.to_axum_event()), s));
+            }
+
+            // Phase 2 — live
+            match s.rx.recv().await {
+                Ok(env) => Some((Ok(env.to_axum_event()), s)),
+
+                Err(RecvError::Lagged(n)) => {
+                    // Slow client fell behind. Emit advisory, then close next poll.
+                    metrics::counter!("rb_sse_dropped_total", "reason" => "lagged").increment(n);
+                    s.done = true;
+                    Some((Ok(SseEnvelope::stream_reset().to_axum_event()), s))
+                }
+
+                Err(RecvError::Closed) => None,
+            }
+        },
+    );
 
     Box::pin(stream)
 }
@@ -179,13 +186,10 @@ mod tests {
 
         bus.publish(&tenant, "test", r#"{"n":1}"#.to_owned());
 
-        let item = tokio::time::timeout(
-            std::time::Duration::from_millis(200),
-            stream.next(),
-        )
-        .await
-        .expect("timeout")
-        .expect("stream ended");
+        let item = tokio::time::timeout(std::time::Duration::from_millis(200), stream.next())
+            .await
+            .expect("timeout")
+            .expect("stream ended");
 
         assert!(item.is_ok());
     }
@@ -225,12 +229,9 @@ mod tests {
         // (Full replay tested in tests/reconnect_replay.rs)
         let mut stream2 = EventStream::new(Arc::clone(&b), &tenant, None, &cfg);
         b.publish(&tenant, "ev", "live".to_owned());
-        let item = tokio::time::timeout(
-            std::time::Duration::from_millis(200),
-            stream2.next(),
-        )
-        .await
-        .expect("timeout");
+        let item = tokio::time::timeout(std::time::Duration::from_millis(200), stream2.next())
+            .await
+            .expect("timeout");
         assert!(item.is_some());
     }
 }

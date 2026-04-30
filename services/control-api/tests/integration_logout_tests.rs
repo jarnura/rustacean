@@ -146,7 +146,11 @@ async fn integration_logout_full_flow() {
         )
         .await
         .unwrap();
-    assert_eq!(resp.status(), StatusCode::NO_CONTENT, "logout must return 204");
+    assert_eq!(
+        resp.status(),
+        StatusCode::NO_CONTENT,
+        "logout must return 204"
+    );
 
     let clear = resp
         .headers()
@@ -179,7 +183,10 @@ async fn integration_logout_full_flow() {
     .fetch_one(&pool)
     .await
     .expect("auth_events count must succeed");
-    assert_eq!(logout_count, 1, "exactly one logout auth_events row expected");
+    assert_eq!(
+        logout_count, 1,
+        "exactly one logout auth_events row expected"
+    );
 
     // 7. Re-logout with the same (now invalid) cookie → 401, no duplicate event.
     let resp = app

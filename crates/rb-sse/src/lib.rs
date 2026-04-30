@@ -65,7 +65,12 @@ impl EventBus {
     /// and [`axum::response::IntoResponse`] (for handlers).
     #[must_use]
     pub fn subscribe(&self, tenant: &TenantId, last_event_id: Option<&EventId>) -> EventStream {
-        EventStream::new(Arc::clone(&self.0), tenant, last_event_id, &SseConfig::default())
+        EventStream::new(
+            Arc::clone(&self.0),
+            tenant,
+            last_event_id,
+            &SseConfig::default(),
+        )
     }
 
     /// Subscribe using an explicit [`SseConfig`] (e.g. to customise keep-alive interval).
@@ -125,13 +130,10 @@ mod tests {
         let (mut rx, _) = testing::raw_subscribe(&bus, &tenant, None);
         bus.publish_raw(&tenant, "ping", r#"{"ok":true}"#.to_owned());
 
-        let env = tokio::time::timeout(
-            std::time::Duration::from_millis(200),
-            rx.recv(),
-        )
-        .await
-        .expect("timeout")
-        .expect("closed");
+        let env = tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv())
+            .await
+            .expect("timeout")
+            .expect("closed");
 
         assert_eq!(env.event, "ping");
         assert_eq!(env.data, r#"{"ok":true}"#);
@@ -150,13 +152,10 @@ mod tests {
 
         bus.publish(&tenant, "data", &Payload { value: 42 });
 
-        let env = tokio::time::timeout(
-            std::time::Duration::from_millis(200),
-            rx.recv(),
-        )
-        .await
-        .expect("timeout")
-        .expect("closed");
+        let env = tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv())
+            .await
+            .expect("timeout")
+            .expect("closed");
 
         let v: serde_json::Value = serde_json::from_str(&env.data).unwrap();
         assert_eq!(v["value"], 42);

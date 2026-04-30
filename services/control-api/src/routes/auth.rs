@@ -56,9 +56,13 @@ pub async fn signup(
     let password_hash = state.hasher.hash(&body.password)?;
 
     let mut tx = state.pool.begin().await?;
-    let result =
-        execute_signup_transaction(&mut tx, &body, &password_hash, state.config.session_ttl_days)
-            .await?;
+    let result = execute_signup_transaction(
+        &mut tx,
+        &body,
+        &password_hash,
+        state.config.session_ttl_days,
+    )
+    .await?;
     tx.commit().await?;
 
     let verify_link = format!(
@@ -75,7 +79,10 @@ pub async fn signup(
     Ok((
         StatusCode::CREATED,
         [("Set-Cookie", cookie)],
-        Json(SignupResponse { email_verification_required: true, user_id: result.user_id }),
+        Json(SignupResponse {
+            email_verification_required: true,
+            user_id: result.user_id,
+        }),
     ))
 }
 
@@ -85,12 +92,11 @@ async fn execute_signup_transaction(
     password_hash: &str,
     session_ttl_days: i64,
 ) -> Result<SignupTransactionResult, AppError> {
-    let email_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM control.users WHERE email = $1)",
-    )
-    .bind(&body.email)
-    .fetch_one(&mut **tx)
-    .await?;
+    let email_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM control.users WHERE email = $1)")
+            .bind(&body.email)
+            .fetch_one(&mut **tx)
+            .await?;
     if email_exists {
         return Err(AppError::EmailTaken);
     }
@@ -116,14 +122,12 @@ async fn execute_signup_transaction(
         .await?;
 
     let user_id = Uuid::new_v4();
-    sqlx::query(
-        "INSERT INTO control.users (id, email, password_hash) VALUES ($1, $2, $3)",
-    )
-    .bind(user_id)
-    .bind(&body.email)
-    .bind(password_hash)
-    .execute(&mut **tx)
-    .await?;
+    sqlx::query("INSERT INTO control.users (id, email, password_hash) VALUES ($1, $2, $3)")
+        .bind(user_id)
+        .bind(&body.email)
+        .bind(password_hash)
+        .execute(&mut **tx)
+        .await?;
 
     sqlx::query(
         "INSERT INTO control.tenant_members (tenant_id, user_id, role) VALUES ($1, $2, 'owner')",
@@ -168,7 +172,11 @@ async fn execute_signup_transaction(
     .execute(&mut **tx)
     .await?;
 
-    Ok(SignupTransactionResult { user_id, session_token, email_token })
+    Ok(SignupTransactionResult {
+        user_id,
+        session_token,
+        email_token,
+    })
 }
 
 fn build_session_cookie(token: &str, secure: bool) -> String {
@@ -196,7 +204,11 @@ fn derive_slug(name: &str, id: Uuid) -> String {
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("-");
-    let base = if base.is_empty() { "workspace".to_owned() } else { base };
+    let base = if base.is_empty() {
+        "workspace".to_owned()
+    } else {
+        base
+    };
     let suffix = &id.simple().to_string()[..6];
     format!("{base}-{suffix}")
 }
@@ -234,11 +246,10 @@ pub async fn forgot_password(
     State(state): State<AppState>,
     Json(body): Json<ForgotPasswordRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let row: Option<(Uuid,)> =
-        sqlx::query_as("SELECT id FROM control.users WHERE email = $1")
-            .bind(&body.email)
-            .fetch_optional(&state.pool)
-            .await?;
+    let row: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM control.users WHERE email = $1")
+        .bind(&body.email)
+        .fetch_optional(&state.pool)
+        .await?;
 
     match row {
         Some((user_id,)) => {
@@ -272,8 +283,7 @@ pub async fn forgot_password(
                 state.config.base_url,
                 reset_token.as_str()
             );
-            let email =
-                EmailTemplate::ResetPassword { link: reset_link }.to_email(&body.email)?;
+            let email = EmailTemplate::ResetPassword { link: reset_link }.to_email(&body.email)?;
             if let Err(e) = state.email_sender.send(email).await {
                 tracing::warn!(
                     user_id = %user_id,
@@ -358,12 +368,10 @@ pub async fn reset_password(
     .execute(&mut *tx)
     .await?;
 
-    sqlx::query(
-        "INSERT INTO control.auth_events (user_id, event) VALUES ($1, 'password_reset')",
-    )
-    .bind(user_id)
-    .execute(&mut *tx)
-    .await?;
+    sqlx::query("INSERT INTO control.auth_events (user_id, event) VALUES ($1, 'password_reset')")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
 
     tx.commit().await?;
 
@@ -499,17 +507,26 @@ mod tests {
 
     #[test]
     fn validate_email_rejects_no_at() {
-        assert!(matches!(validate_email("nodomain"), Err(AppError::InvalidEmail)));
+        assert!(matches!(
+            validate_email("nodomain"),
+            Err(AppError::InvalidEmail)
+        ));
     }
 
     #[test]
     fn validate_email_rejects_empty_local() {
-        assert!(matches!(validate_email("@example.com"), Err(AppError::InvalidEmail)));
+        assert!(matches!(
+            validate_email("@example.com"),
+            Err(AppError::InvalidEmail)
+        ));
     }
 
     #[test]
     fn validate_email_rejects_no_dot_in_domain() {
-        assert!(matches!(validate_email("user@localhost"), Err(AppError::InvalidEmail)));
+        assert!(matches!(
+            validate_email("user@localhost"),
+            Err(AppError::InvalidEmail)
+        ));
     }
 
     #[test]

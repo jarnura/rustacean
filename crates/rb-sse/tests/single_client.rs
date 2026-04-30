@@ -8,7 +8,11 @@ async fn single_client_receives_published_event() {
 
     let (mut rx, _) = testing::raw_subscribe(&bus, &tenant, None);
 
-    bus.publish_raw(&tenant, "ingest.status", r#"{"status":"processing"}"#.to_owned());
+    bus.publish_raw(
+        &tenant,
+        "ingest.status",
+        r#"{"status":"processing"}"#.to_owned(),
+    );
 
     let env = tokio::time::timeout(std::time::Duration::from_millis(500), rx.recv())
         .await
@@ -43,7 +47,6 @@ async fn single_client_receives_events_in_order() {
 
 #[tokio::test]
 async fn event_stream_implements_stream_trait() {
-
     let bus = EventBus::new(SseConfig::default());
     let tenant = TenantId::new();
 

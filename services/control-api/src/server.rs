@@ -108,7 +108,9 @@ pub async fn run(config: Config) -> Result<()> {
 /// Fails fast at startup if keys are present but malformed — an operator
 /// mistake should surface immediately, not at first API call.
 fn build_gh_app(config: &Config) -> Result<Option<GhApp>> {
-    let (Some(app_id), Some(pem_b64)) = (config.gh_app_id, config.gh_app_private_key_b64.as_deref()) else {
+    let (Some(app_id), Some(pem_b64)) =
+        (config.gh_app_id, config.gh_app_private_key_b64.as_deref())
+    else {
         tracing::info!("RB_GH_APP_ID / RB_GH_APP_PRIVATE_KEY not set — GitHub App disabled");
         return Ok(None);
     };

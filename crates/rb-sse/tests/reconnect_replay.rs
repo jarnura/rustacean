@@ -15,13 +15,10 @@ async fn replay_delivers_events_after_last_known_id() {
             bus.publish_raw(&tenant, "ev", format!("{i}"));
         }
         for _ in 0..5 {
-            let env = tokio::time::timeout(
-                std::time::Duration::from_millis(200),
-                rx.recv(),
-            )
-            .await
-            .expect("timeout")
-            .expect("closed");
+            let env = tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv())
+                .await
+                .expect("timeout")
+                .expect("closed");
             collected.push(env.id.clone());
         }
         collected
@@ -68,21 +65,15 @@ async fn replay_with_last_event_id_of_most_recent_returns_empty() {
 
     let (mut rx_tmp, _) = testing::raw_subscribe(&bus, &tenant, None);
     bus.publish_raw(&tenant, "ev", "only".to_owned());
-    let env = tokio::time::timeout(
-        std::time::Duration::from_millis(200),
-        rx_tmp.recv(),
-    )
-    .await
-    .expect("timeout")
-    .expect("closed");
+    let env = tokio::time::timeout(std::time::Duration::from_millis(200), rx_tmp.recv())
+        .await
+        .expect("timeout")
+        .expect("closed");
     let last_id = env.id.clone();
 
     // Subscribe with the ID of the most recent event → no replay expected.
     let (_, replay) = testing::raw_subscribe(&bus, &tenant, Some(&last_id));
-    assert!(
-        replay.is_empty(),
-        "no events after the most recent event"
-    );
+    assert!(replay.is_empty(), "no events after the most recent event");
 }
 
 #[tokio::test]
@@ -115,14 +106,11 @@ async fn replay_plus_live_stream_delivers_all_events() {
 
     // Expect: "1", "2" from replay, then "3" from live.
     for expected_data in ["1", "2", "3"] {
-        let item = tokio::time::timeout(
-            std::time::Duration::from_millis(500),
-            stream.next(),
-        )
-        .await
-        .expect("timeout")
-        .expect("stream ended")
-        .expect("infallible");
+        let item = tokio::time::timeout(std::time::Duration::from_millis(500), stream.next())
+            .await
+            .expect("timeout")
+            .expect("stream ended")
+            .expect("infallible");
 
         // axum's Event type doesn't implement Debug or expose data directly,
         // so we verify via the stream item being Ok (non-error) which is

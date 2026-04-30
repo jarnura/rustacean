@@ -36,8 +36,8 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     let cfg = ProducerCfg::default();
-    let producer = Producer::<IngestStatusEvent>::new(&cfg)
-        .context("failed to create Kafka producer")?;
+    let producer =
+        Producer::<IngestStatusEvent>::new(&cfg).context("failed to create Kafka producer")?;
 
     let tenant_id = TenantId::from(cli.tenant_id);
 
@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
         let payload = IngestStatusEvent {
             ingest_request_id: format!("smoke-{i}"),
             tenant_id: cli.tenant_id.to_string(),
-            status: IngestStatus::Processing as i32,  // synthetic — shows pipeline is active
+            status: IngestStatus::Processing as i32, // synthetic — shows pipeline is active
             error_message: String::new(),
             occurred_at_ms: chrono::Utc::now().timestamp_millis(),
         };

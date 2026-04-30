@@ -59,8 +59,8 @@ impl RingBuffer {
     }
 
     fn evict_expired(&mut self) {
-        let ttl_chrono = chrono::Duration::from_std(self.ttl)
-            .unwrap_or(chrono::Duration::seconds(300));
+        let ttl_chrono =
+            chrono::Duration::from_std(self.ttl).unwrap_or(chrono::Duration::seconds(300));
         let cutoff = Utc::now() - ttl_chrono;
         while let Some(front) = self.buf.front() {
             if front.created_at < cutoff {
@@ -216,13 +216,10 @@ mod tests {
 
         b.publish(&tenant, "test.ev", r#"{"x":1}"#.to_owned());
 
-        let env = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            rx.recv(),
-        )
-        .await
-        .expect("timeout")
-        .expect("channel closed");
+        let env = tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv())
+            .await
+            .expect("timeout")
+            .expect("channel closed");
         assert_eq!(env.event, "test.ev");
         assert_eq!(env.data, r#"{"x":1}"#);
     }
@@ -237,21 +234,15 @@ mod tests {
 
         b.publish(&t1, "ev", "for-t1".to_owned());
 
-        let env1 = tokio::time::timeout(
-            std::time::Duration::from_millis(100),
-            rx1.recv(),
-        )
-        .await
-        .expect("t1 timeout")
-        .expect("t1 channel closed");
+        let env1 = tokio::time::timeout(std::time::Duration::from_millis(100), rx1.recv())
+            .await
+            .expect("t1 timeout")
+            .expect("t1 channel closed");
         assert_eq!(env1.data, "for-t1");
 
         // rx2 must not receive t1's event.
-        let t2_result = tokio::time::timeout(
-            std::time::Duration::from_millis(30),
-            rx2.recv(),
-        )
-        .await;
+        let t2_result =
+            tokio::time::timeout(std::time::Duration::from_millis(30), rx2.recv()).await;
         assert!(t2_result.is_err(), "t2 should not receive t1 events");
     }
 }

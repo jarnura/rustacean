@@ -47,10 +47,8 @@ impl Config {
     /// environment variable cannot be parsed.
     pub fn from_env() -> Result<Self> {
         Ok(Self {
-            listen_addr: env::var("RB_LISTEN_ADDR")
-                .unwrap_or_else(|_| "0.0.0.0:8080".to_owned()),
-            database_url: env::var("RB_DATABASE_URL")
-                .context("RB_DATABASE_URL is required")?,
+            listen_addr: env::var("RB_LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_owned()),
+            database_url: env::var("RB_DATABASE_URL").context("RB_DATABASE_URL is required")?,
             cors_origins: env::var("RB_CORS_ORIGINS")
                 .unwrap_or_else(|_| "http://localhost:15173".to_owned())
                 .split(',')
@@ -95,7 +93,7 @@ impl Config {
             kafka_bootstrap_servers: env::var("KAFKA_BOOTSTRAP_SERVERS")
                 .unwrap_or_else(|_| "kafka:9092".to_owned()),
             dev_test_routes: env::var("RB_DEV_TEST_ROUTES")
-                .map_or(false, |v| v == "1" || v.eq_ignore_ascii_case("true")),
+                .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
         })
     }
 

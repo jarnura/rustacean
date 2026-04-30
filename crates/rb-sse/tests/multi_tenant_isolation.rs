@@ -1,7 +1,7 @@
 use rb_sse::{EventBus, SseConfig, TenantId, testing};
 
 /// Events published for tenant A must NOT reach tenant B's subscriber,
-/// and vice versa — even when the same EventBus instance is used.
+/// and vice versa — even when the same `EventBus` instance is used.
 #[tokio::test]
 async fn tenant_a_events_not_visible_to_tenant_b() {
     let bus = EventBus::new(SseConfig::default());
@@ -21,8 +21,7 @@ async fn tenant_a_events_not_visible_to_tenant_b() {
     assert!(ev_a.data.contains("\"A\""));
 
     // Tenant B must NOT receive tenant A's event.
-    let t_b_result =
-        tokio::time::timeout(std::time::Duration::from_millis(50), rx_b.recv()).await;
+    let t_b_result = tokio::time::timeout(std::time::Duration::from_millis(50), rx_b.recv()).await;
     assert!(
         t_b_result.is_err(),
         "tenant B should not receive tenant A's events"
@@ -46,8 +45,7 @@ async fn tenant_b_events_not_visible_to_tenant_a() {
         .expect("B channel closed");
     assert!(ev_b.data.contains("\"B\""));
 
-    let t_a_result =
-        tokio::time::timeout(std::time::Duration::from_millis(50), rx_a.recv()).await;
+    let t_a_result = tokio::time::timeout(std::time::Duration::from_millis(50), rx_a.recv()).await;
     assert!(
         t_a_result.is_err(),
         "tenant A should not receive tenant B's events"
@@ -90,22 +88,20 @@ async fn interleaved_events_for_two_tenants_stay_isolated() {
     bus.publish_raw(&t_b, "ev", r#"{"t":"B","n":2}"#.to_owned());
 
     for expected_n in [1u32, 2] {
-        let ev =
-            tokio::time::timeout(std::time::Duration::from_millis(200), rx_a.recv())
-                .await
-                .expect("A timed out")
-                .expect("A closed");
+        let ev = tokio::time::timeout(std::time::Duration::from_millis(200), rx_a.recv())
+            .await
+            .expect("A timed out")
+            .expect("A closed");
         let v: serde_json::Value = serde_json::from_str(&ev.data).unwrap();
         assert_eq!(v["t"], "A");
         assert_eq!(v["n"], expected_n);
     }
 
     for expected_n in [1u32, 2] {
-        let ev =
-            tokio::time::timeout(std::time::Duration::from_millis(200), rx_b.recv())
-                .await
-                .expect("B timed out")
-                .expect("B closed");
+        let ev = tokio::time::timeout(std::time::Duration::from_millis(200), rx_b.recv())
+            .await
+            .expect("B timed out")
+            .expect("B closed");
         let v: serde_json::Value = serde_json::from_str(&ev.data).unwrap();
         assert_eq!(v["t"], "B");
         assert_eq!(v["n"], expected_n);

@@ -14,13 +14,13 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use control_api::{AppState, Config, build};
-use rb_sse::{EventBus, SseConfig};
 use hmac::{Hmac, Mac};
 use http_body_util::BodyExt as _;
 use jsonwebtoken::EncodingKey;
 use rb_auth::{LoginRateLimiter, PasswordHasher};
 use rb_email::from_transport;
 use rb_github::{GhApp, Secret};
+use rb_sse::{EventBus, SseConfig};
 use sha2::Sha256;
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt as _;
@@ -160,7 +160,12 @@ async fn body_is_empty(resp: axum::response::Response) -> bool {
 #[tokio::test]
 async fn webhook_returns_503_when_app_not_configured() {
     let app = build(state_without_gh());
-    let req = webhook_request(b"{}".to_vec(), Some("sha256=00".into()), Some("d"), Some("ping"));
+    let req = webhook_request(
+        b"{}".to_vec(),
+        Some("sha256=00".into()),
+        Some("d"),
+        Some("ping"),
+    );
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert!(body_is_empty(resp).await, "503 body must be empty");

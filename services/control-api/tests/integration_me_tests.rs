@@ -212,13 +212,12 @@ async fn integration_me_extends_session_last_seen_at() {
     // Capture last_seen_at BEFORE the GET. Sleep briefly so the post-GET
     // refresh produces a strictly later timestamp.
     let token_hash = rb_auth::sha256_hex(&token);
-    let before: chrono::DateTime<chrono::Utc> = sqlx::query_scalar(
-        "SELECT last_seen_at FROM control.sessions WHERE token_hash = $1",
-    )
-    .bind(&token_hash)
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let before: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar("SELECT last_seen_at FROM control.sessions WHERE token_hash = $1")
+            .bind(&token_hash)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
@@ -239,13 +238,12 @@ async fn integration_me_extends_session_last_seen_at() {
     let mut after = before;
     for _ in 0..20 {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        after = sqlx::query_scalar(
-            "SELECT last_seen_at FROM control.sessions WHERE token_hash = $1",
-        )
-        .bind(&token_hash)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        after =
+            sqlx::query_scalar("SELECT last_seen_at FROM control.sessions WHERE token_hash = $1")
+                .bind(&token_hash)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         if after > before {
             break;
         }
@@ -330,7 +328,10 @@ async fn integration_me_with_unverified_email_returns_email_not_verified() {
         return;
     };
     let app = build(state);
-    let email = format!("integ-me-unverified-{}@test.example", Uuid::new_v4().simple());
+    let email = format!(
+        "integ-me-unverified-{}@test.example",
+        Uuid::new_v4().simple()
+    );
     // verify_email=false: signup creates user with email_verified_at = NULL,
     // and login still succeeds (returning email_verification_required: true).
     let token = signup_and_login(

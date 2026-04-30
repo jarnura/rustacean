@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use rb_kafka::{Consumer, ConsumerCfg};
-use rb_schemas::{IngestStatus, IngestStatusEvent, TenantId};
+use rb_schemas::{IngestStatus, IngestStatusEvent};
 use rb_sse::EventBus;
 use serde::Serialize;
 
@@ -20,9 +20,7 @@ struct IngestStatusEventJson {
 
 impl From<&IngestStatusEvent> for IngestStatusEventJson {
     fn from(ev: &IngestStatusEvent) -> Self {
-        let status = IngestStatus::try_from(ev.status)
-            .map(status_label)
-            .unwrap_or("unknown");
+        let status = IngestStatus::try_from(ev.status).map_or("unknown", status_label);
         Self {
             ingest_request_id: ev.ingest_request_id.clone(),
             tenant_id: ev.tenant_id.clone(),
@@ -53,7 +51,10 @@ fn status_label(s: IngestStatus) -> &'static str {
 /// # Errors
 ///
 /// Returns an error if the Kafka consumer cannot be created or subscribed.
-pub fn spawn(cfg: &ConsumerCfg, sse_bus: Arc<EventBus>) -> anyhow::Result<tokio::task::JoinHandle<()>> {
+pub fn spawn(
+    cfg: &ConsumerCfg,
+    sse_bus: Arc<EventBus>,
+) -> anyhow::Result<tokio::task::JoinHandle<()>> {
     let consumer = Consumer::<IngestStatusEvent>::new(cfg)?;
     consumer.subscribe(&["rb.projector.events"])?;
 

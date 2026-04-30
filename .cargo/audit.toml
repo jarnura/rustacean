@@ -3,4 +3,15 @@
 # rsa v0.9.10 is pulled in exclusively by the sqlx-mysql optional feature,
 # which this project never enables (only sqlx-postgres is used). No patched
 # version of rsa exists upstream. Risk is not exploitable in this codebase.
-ignore = ["RUSTSEC-2023-0071"]
+ignore = [
+    "RUSTSEC-2023-0071",
+    # RUSTSEC-2026-0104, RUSTSEC-2026-0099, RUSTSEC-2026-0098: rustls-webpki 0.101.7
+    # vulnerabilities are pulled in exclusively through the rb-blob `s3` optional feature
+    # via aws-smithy-http-client 1.1.12 → hyper-rustls 0.24 → rustls 0.21. The s3 feature
+    # is not enabled in production builds without RB_BLOB_STORE=s3. The AWS SDK has not yet
+    # released a version of aws-smithy-http-client pinned to rustls ≥0.23 / webpki ≥0.103.
+    # Track upstream: https://github.com/awslabs/smithy-rs
+    "RUSTSEC-2026-0104",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0098",
+]

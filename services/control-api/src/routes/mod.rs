@@ -9,10 +9,7 @@ pub mod me;
 pub mod repos;
 pub mod tenants;
 
-use axum::{
-    Router,
-    routing::{delete, get, post, put},
-};
+use axum::{Router, routing::{delete, get, post, put}};
 
 use crate::routes::{
     api_keys::{create_api_key, list_api_keys, revoke_api_key},
@@ -48,27 +45,15 @@ pub fn build(state: AppState) -> Router {
         .route("/v1/api-keys", post(create_api_key))
         .route("/v1/api-keys", get(list_api_keys))
         .route("/v1/api-keys/{id}", delete(revoke_api_key))
-        .route(
-            "/v1/tenants/{id}/members",
-            get(list_members).post(invite_member),
-        )
-        .route(
-            "/v1/tenants/{id}/members/{uid}/role",
-            put(update_member_role),
-        )
+        .route("/v1/tenants/{id}/members", get(list_members).post(invite_member))
+        .route("/v1/tenants/{id}/members/{uid}/role", put(update_member_role))
         .route("/v1/tenants/{id}/members/{uid}", delete(remove_member))
-        .route(
-            "/v1/tenants/{id}/transfer-ownership",
-            post(transfer_ownership),
-        )
+        .route("/v1/tenants/{id}/transfer-ownership", post(transfer_ownership))
         .route("/v1/health/github-app", get(github_app_health))
         .route("/v1/github/webhook", post(github_webhook))
         .route("/v1/github/install-url", get(github_install_url))
         .route("/v1/github/callback", get(github_callback))
-        .route(
-            "/v1/github/installations/{id}/available-repos",
-            get(list_available_repos),
-        )
+        .route("/v1/github/installations/{id}/available-repos", get(list_available_repos))
         .route("/v1/repos", post(connect_repo).get(list_repos))
         .route("/v1/repos/{id}/ingest", post(trigger_ingest))
         .route("/v1/ingest/events", get(events_stream))

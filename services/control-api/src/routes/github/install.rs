@@ -8,8 +8,8 @@ use axum::{
 };
 use rand::RngCore as _;
 use serde::{Deserialize, Serialize};
-use urlencoding::encode as urlencode;
 use utoipa::ToSchema;
+use urlencoding::encode as urlencode;
 use uuid::Uuid;
 
 use crate::{
@@ -76,10 +76,7 @@ pub async fn github_install_url(
         "github install-url: state token issued"
     );
 
-    Ok(Json(InstallUrlResponse {
-        url,
-        state_token: token_hex,
-    }))
+    Ok(Json(InstallUrlResponse { url, state_token: token_hex }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -127,17 +124,14 @@ pub async fn github_callback(
 
     let (tenant_id, user_id) = row.ok_or(AppError::InvalidToken)?;
 
-    let info = gh
-        .fetch_installation(params.installation_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(
-                installation_id = params.installation_id,
-                error = %e,
-                "callback: failed to fetch installation from GitHub"
-            );
-            AppError::Internal(anyhow::anyhow!("failed to fetch GitHub installation"))
-        })?;
+    let info = gh.fetch_installation(params.installation_id).await.map_err(|e| {
+        tracing::error!(
+            installation_id = params.installation_id,
+            error = %e,
+            "callback: failed to fetch installation from GitHub"
+        );
+        AppError::Internal(anyhow::anyhow!("failed to fetch GitHub installation"))
+    })?;
 
     let (installation_uuid,): (Uuid,) = sqlx::query_as(
         "INSERT INTO control.github_installations \

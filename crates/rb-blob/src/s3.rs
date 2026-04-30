@@ -86,7 +86,9 @@ impl S3Store {
         let bucket = std::env::var("RB_BLOB_S3_BUCKET")
             .unwrap_or_else(|_| "rb-blobs".to_string());
 
-        let sdk_config = aws_config::from_env().load().await;
+        let sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+            .load()
+            .await;
         let mut s3_builder = aws_sdk_s3::config::Builder::from(&sdk_config);
 
         if let Ok(endpoint) = std::env::var("RB_BLOB_S3_ENDPOINT") {
@@ -343,11 +345,9 @@ mod tests {
     /// otherwise the test is skipped via `None`.
     async fn try_store() -> Option<S3Store> {
         // Accept either env var so the caller can set whichever is convenient.
-        if std::env::var("TEST_S3_ENDPOINT").is_ok() {
-            std::env::set_var(
-                "RB_BLOB_S3_ENDPOINT",
-                std::env::var("TEST_S3_ENDPOINT").unwrap(),
-            );
+        if let Ok(endpoint) = std::env::var("TEST_S3_ENDPOINT") {
+            // SAFETY: single-threaded test setup; no other threads are reading env at this point.
+            unsafe { std::env::set_var("RB_BLOB_S3_ENDPOINT", endpoint) };
         }
         if std::env::var("RB_BLOB_S3_ENDPOINT").is_err() {
             eprintln!("Skipping S3 test — set TEST_S3_ENDPOINT or RB_BLOB_S3_ENDPOINT to enable");

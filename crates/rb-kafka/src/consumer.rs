@@ -96,31 +96,36 @@ impl<E: ProstMessage + Default> Consumer<E> {
                     .set(lag);
                 }
 
-                // Seed consume span as child of producer span via W3C context extraction.
-                // The attached context is current for the remainder of this call so that
-                // any instrumented sub-spans are linked to the upstream trace.
-                let _cx_guard = {
+                // Build consume span as child of the upstream producer trace.
+                // _cx_guard is scoped to span construction: the span captures the parent
+                // relationship at creation time; both _cx_guard and key_str are dropped
+                // before any .await point.
+                let consume_span = {
                     let extractor = KafkaHeaderExtractor(&headers);
-                    opentelemetry::global::get_text_map_propagator(|prop| prop.extract(&extractor))
-                        .attach()
+                    let _cx_guard =
+                        opentelemetry::global::get_text_map_propagator(|prop| {
+                            prop.extract(&extractor)
+                        })
+                        .attach();
+                    let key_str = m
+                        .key()
+                        .map(|k| String::from_utf8_lossy(k).into_owned())
+                        .unwrap_or_default();
+                    tracing::info_span!(
+                        "kafka.consume",
+                        "otel.kind" = "CONSUMER",
+                        "messaging.system" = "kafka",
+                        "messaging.destination" = %topic,
+                        "messaging.kafka.partition" = partition,
+                        "messaging.kafka.offset" = offset,
+                        "messaging.kafka.message_key" = %key_str,
+                        "rb.tenant_id" = tracing::field::Empty,
+                        "rb.event_id" = tracing::field::Empty,
+                        "rb.schema_version" = tracing::field::Empty,
+                        "rb.attempt" = tracing::field::Empty,
+                    )
+                    // key_str and _cx_guard dropped here
                 };
-                let key_str = m
-                    .key()
-                    .map(|k| String::from_utf8_lossy(k).into_owned())
-                    .unwrap_or_default();
-                let consume_span = tracing::info_span!(
-                    "kafka.consume",
-                    "otel.kind" = "CONSUMER",
-                    "messaging.system" = "kafka",
-                    "messaging.destination" = %topic,
-                    "messaging.kafka.partition" = partition,
-                    "messaging.kafka.offset" = offset,
-                    "messaging.kafka.message_key" = %key_str,
-                    "rb.tenant_id" = tracing::field::Empty,
-                    "rb.event_id" = tracing::field::Empty,
-                    "rb.schema_version" = tracing::field::Empty,
-                    "rb.attempt" = tracing::field::Empty,
-                );
                 // Scoped entry: span active only for the synchronous decode; guard
                 // drops at block exit so it is never held across an .await point.
                 let result = {

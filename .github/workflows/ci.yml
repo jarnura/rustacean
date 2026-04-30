@@ -80,6 +80,40 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y cmake libssl-dev libsasl2-dev zlib1g-dev libcurl4-openssl-dev
       - run: bash scripts/check-openapi-sync.sh
 
+  codegen-drift:
+    name: codegen drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install rdkafka build dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y cmake libssl-dev libsasl2-dev zlib1g-dev libcurl4-openssl-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build control-api binary
+        run: cargo build -p control-api --quiet
+      - name: Regenerate openapi.json in place
+        run: ./target/debug/control-api print-openapi > openapi.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Regenerate frontend schema in place
+        working-directory: frontend
+        run: npm run gen:api
+      - name: Detect drift via git diff
+        run: |
+          if ! git diff --exit-code openapi.json frontend/src/api/generated/schema.ts; then
+            echo ""
+            echo "::error::Generated artefacts are stale. Run the following commands and commit the result:"
+            echo "::error::  cargo run -p control-api -- print-openapi > openapi.json"
+            echo "::error::  cd frontend && npm run gen:api"
+            exit 1
+          fi
+
   frontend-typecheck:
     name: frontend typecheck
     runs-on: ubuntu-latest

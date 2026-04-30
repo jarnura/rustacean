@@ -7,7 +7,6 @@ use rdkafka::{
     message::{Header, OwnedHeaders},
     producer::{FutureProducer, FutureRecord},
 };
-use tracing::instrument;
 
 use crate::{
     config::ProducerCfg,
@@ -48,13 +47,24 @@ impl<E: ProstMessage> Producer<E> {
         })
     }
 
-    #[instrument(skip(self, envelope), fields(topic, event_id = %envelope.event_id))]
     pub async fn publish(
         &self,
         topic: &str,
         key: &[u8],
         envelope: EventEnvelope<E>,
     ) -> Result<DeliveryReport, KafkaError> {
+        let key_str = String::from_utf8_lossy(key);
+        let produce_span = tracing::info_span!(
+            "kafka.produce",
+            "otel.kind" = "PRODUCER",
+            "messaging.system" = "kafka",
+            "messaging.destination" = %topic,
+            "messaging.kafka.message_key" = %key_str,
+            "rb.tenant_id" = %envelope.tenant_id,
+            "rb.event_id" = %envelope.event_id,
+            "rb.schema_version" = envelope.schema_version.as_str(),
+        );
+        let _enter = produce_span.enter();
         let created_at = envelope.created_at;
         let headers = build_headers(&envelope);
         let payload = envelope.payload.encode_to_vec();

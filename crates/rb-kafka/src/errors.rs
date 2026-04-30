@@ -24,6 +24,8 @@ pub enum KafkaError {
     Rdkafka(#[from] rdkafka::error::KafkaError),
     #[error("max retries exceeded; message should be routed to DLQ")]
     MaxRetriesExceeded,
+    #[error("malformed W3C traceparent header: {0}")]
+    InvalidTraceparent(String),
 }
 
 impl KafkaError {
@@ -38,6 +40,7 @@ impl KafkaError {
                 | KafkaError::TenantMismatch
                 | KafkaError::InvalidBlobRef(_)
                 | KafkaError::InvalidHeaderUuid { .. }
+                | KafkaError::InvalidTraceparent(_)
         )
     }
 }

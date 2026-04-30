@@ -18,6 +18,7 @@ use crate::{
         HEADER_TRACEPARENT, HEADER_TRACESTATE,
     },
     errors::KafkaError,
+    headers::{is_valid_traceparent, KafkaHeaderExtractor},
     producer::decode_envelope,
 };
 
@@ -60,6 +61,7 @@ impl<E: ProstMessage + Default> Consumer<E> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn next(&self) -> Option<Result<EventEnvelope<E>, KafkaError>> {
         let msg = self.inner.stream().next().await?;
         match msg {
@@ -89,7 +91,59 @@ impl<E: ProstMessage + Default> Consumer<E> {
                     .set(lag);
                 }
 
+                // Seed consume span as child of producer span via W3C context extraction.
+                // The attached context is current for the remainder of this call so that
+                // any instrumented sub-spans are linked to the upstream trace.
+                let _cx_guard = {
+                    let extractor = KafkaHeaderExtractor(&headers);
+                    opentelemetry::global::get_text_map_propagator(|prop| {
+                        prop.extract(&extractor)
+                    })
+                    .attach()
+                };
+                let consume_span = tracing::info_span!(
+                    "kafka.consume",
+                    "otel.kind" = "CONSUMER",
+                    topic = %topic,
+                    partition,
+                    offset,
+                );
+                let _enter = consume_span.enter();
+
                 let result = decode_envelope(payload, &headers, &topic, partition, offset);
+
+                // Malformed traceparent: DLQ immediately and surface the error.
+                // trace_context is cleared before nack so the DLQ record doesn't
+                // re-trigger validation when a downstream DLQ consumer reads it.
+                let result = match result {
+                    Ok(mut env) => {
+                        let malformed_tp = env.trace_context.as_ref().and_then(|tc| {
+                            if !tc.traceparent.is_empty()
+                                && !is_valid_traceparent(&tc.traceparent)
+                            {
+                                Some(tc.traceparent.clone())
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(tp) = malformed_tp {
+                            env.trace_context = None;
+                            let _ = self.nack_to_dlq(&env, "invalid-traceparent").await;
+                            let _ = self.commit(&env).await;
+                            counter!(
+                                "rb_kafka_messages_total",
+                                "op" => "consume",
+                                "outcome" => "err",
+                                "topic" => topic.clone()
+                            )
+                            .increment(1);
+                            return Some(Err(KafkaError::InvalidTraceparent(tp)));
+                        }
+                        Ok(env)
+                    }
+                    Err(e) => Err(e),
+                };
+
                 match &result {
                     Ok(env) => {
                         counter!(

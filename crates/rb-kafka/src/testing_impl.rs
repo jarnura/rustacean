@@ -24,6 +24,7 @@ use crate::{
         HEADER_TRACESTATE,
     },
     errors::KafkaError,
+    headers::{is_valid_traceparent, KafkaHeaderExtractor},
     producer::decode_envelope,
 };
 
@@ -176,7 +177,49 @@ impl<E: ProstMessage + Default> TestConsumer<E> {
         match rx.recv().await {
             Ok(msg) => {
                 let topic = msg.topic.clone();
+
+                // Seed consume span (no-op when no OTel propagator is installed in tests).
+                let _cx_guard = {
+                    let extractor = KafkaHeaderExtractor(&msg.headers);
+                    opentelemetry::global::get_text_map_propagator(|prop| {
+                        prop.extract(&extractor)
+                    })
+                    .attach()
+                };
+
                 let result = decode_envelope(&msg.payload, &msg.headers, &msg.topic, 0, 0);
+
+                // Malformed traceparent: auto-DLQ and return error, matching Consumer::next().
+                // trace_context is cleared before nack so the DLQ record doesn't
+                // re-trigger validation when a downstream DLQ consumer reads it.
+                let result = match result {
+                    Ok(mut env) => {
+                        let malformed_tp = env.trace_context.as_ref().and_then(|tc| {
+                            if !tc.traceparent.is_empty()
+                                && !is_valid_traceparent(&tc.traceparent)
+                            {
+                                Some(tc.traceparent.clone())
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(tp) = malformed_tp {
+                            env.trace_context = None;
+                            let _ = self.nack_to_dlq(&env, "invalid-traceparent").await;
+                            counter!(
+                                "rb_kafka_messages_total",
+                                "op" => "consume",
+                                "outcome" => "err",
+                                "topic" => topic.clone()
+                            )
+                            .increment(1);
+                            return Some(Err(KafkaError::InvalidTraceparent(tp)));
+                        }
+                        Ok(env)
+                    }
+                    Err(e) => Err(e),
+                };
+
                 match &result {
                     Ok(env) => {
                         counter!(

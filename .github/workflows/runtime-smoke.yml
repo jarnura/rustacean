@@ -1,0 +1,78 @@
+name: Runtime Smoke
+
+# Runs on every PR that touches Cargo manifests, lock file, Dockerfiles, or
+# compose configuration — the files most likely to introduce a glibc/link mismatch
+# or a missing runtime library (cf. distroless incident, PR #137).
+on:
+  pull_request:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**/Cargo.toml'
+      - 'services/**/Cargo.toml'
+      - 'docker/**'
+      - 'compose/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job name IS the required-check name registered in branch protection.
+  runtime-smoke-required:
+    name: runtime-smoke-required
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build the release image from the PR's own Dockerfile.
+      # cache-from/to reuse layer cache across runs for faster builds.
+      - name: Build control-api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/control-api/Dockerfile
+          load: true
+          tags: control-api:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Probe: run the binary with --version, expect exit 0 + semver output
+      # within 5 s.  Any shared-library error (libz, GLIBC version mismatch)
+      # surfaces here before the image reaches UAT.
+      - name: Probe binary start (5 s timeout)
+        run: |
+          set -euo pipefail
+
+          output=$(timeout 5s \
+            docker run --rm \
+              --entrypoint /usr/local/bin/control-api \
+              control-api:smoke \
+              --version 2>&1) || {
+            rc=$?
+            echo "::error::control-api binary probe exited $rc (non-zero or timeout >5 s)"
+            echo "$output"
+            exit 1
+          }
+
+          echo "$output"
+
+          # Hard-fail on known runtime linker error patterns.
+          if echo "$output" | grep -qiE \
+              'error while loading shared libraries|GLIBC_[0-9]+\.[0-9]+ not found|libz\.so'; then
+            echo "::error::Runtime linker error detected — image is missing a shared library"
+            exit 1
+          fi
+
+          # Must emit at least one semver-like token (e.g. "0.1.0").
+          if ! echo "$output" | grep -qE '[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::--version output did not contain a semver string: $output"
+            exit 1
+          fi
+
+          echo "Smoke PASSED: $output"

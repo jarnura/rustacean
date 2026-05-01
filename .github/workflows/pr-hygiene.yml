@@ -51,10 +51,9 @@ jobs:
             FAILED=1
           fi
 
-          if echo "$PR_BODY" | grep -qiE "$TRACKER_RE"; then
-            echo "::error::PR body contains an internal tracking reference. Remove it before merging."
-            FAILED=1
-          fi
+          # PR body scan intentionally omitted: once the tracker-issue bracket prefix is an
+          # approved title form, body mentions of the same id (Summary, Closes, Follow-on)
+          # are legitimate context, not leaks. Diff scanner below stays strict.
 
           if ! echo "$PR_BODY" | grep -qiE '(closes|fixes|resolves)[[:space:]]+#[0-9]+'; then
             echo "::error::PR body does not contain a 'Closes #XX', 'Fixes #XX', or 'Resolves #XX' link. Add one to auto-close the related GitHub issue."

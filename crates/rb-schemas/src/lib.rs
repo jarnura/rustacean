@@ -9,6 +9,7 @@ pub use ingest::{
     AuditEvent, EmbeddingPendingEvent, ExpandedFileEvent, GraphRelationEvent, IngestRequest,
     IngestStage, IngestStatus, IngestStatusEvent, ItemKind, ParsedItemEvent, RelationKind,
     SourceFileEvent, Tombstone, TypecheckedItemEvent,
+    parsed_item_event, source_file_event,
 };
 
 /// Newtype over [`Uuid`] representing a tenant identifier.

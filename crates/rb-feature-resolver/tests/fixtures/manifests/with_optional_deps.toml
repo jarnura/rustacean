@@ -1,0 +1,16 @@
+[package]
+name = "fixture-optional-deps"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["json"]
+json = ["dep:serde_json"]
+xml = ["dep:quick-xml", "dep:serde"]
+derive = ["serde/derive"]
+full = ["json", "xml", "derive"]
+
+[dependencies]
+serde_json = { version = "1", optional = true }
+quick-xml = { version = "0.31", optional = true }
+serde = { version = "1", optional = true }

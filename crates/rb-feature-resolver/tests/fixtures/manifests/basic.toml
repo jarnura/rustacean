@@ -1,0 +1,11 @@
+[package]
+name = "fixture-basic"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["logging"]
+logging = []
+tracing = ["logging"]
+full = ["logging", "tracing", "metrics"]
+metrics = []

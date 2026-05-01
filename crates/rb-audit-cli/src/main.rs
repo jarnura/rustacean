@@ -19,6 +19,9 @@ use std::process;
 
 use anyhow::{Context as _, Result};
 use clap::{Parser, Subcommand};
+use rb_schemas::TenantId;
+use rb_storage_neo4j::tenant_label;
+use rb_tenant::TenantCtx;
 use serde_json::Value;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;
@@ -94,6 +97,14 @@ async fn main() {
 
 /// Returns `Ok(true)` when all checks pass (no leak, audit trail present).
 async fn run_check_leak(tenant: Uuid, skip_neo4j: bool, skip_qdrant: bool) -> Result<bool> {
+    // Derive store identifiers from the canonical crate functions so this CLI
+    // always matches what the storage layers actually create.
+    let tenant_id = TenantId::from(tenant);
+    let ctx = TenantCtx::new(tenant_id);
+    let schema_name = ctx.schema_name().to_owned();
+    let neo4j_label = tenant_label(&tenant_id);
+    let qdrant_collection = qdrant_collection_name(&tenant_id);
+
     let database_url =
         std::env::var("RB_DATABASE_URL").context("RB_DATABASE_URL is required")?;
 
@@ -110,7 +121,6 @@ async fn run_check_leak(tenant: Uuid, skip_neo4j: bool, skip_qdrant: bool) -> Re
     // ------------------------------------------------------------------
 
     // 1. Tenant schema projection tables must be empty after tombstone.
-    let schema_name = format!("tenant_{}", tenant.simple());
     let pg_pass = check_pg_tables_empty(&pool, &schema_name, tenant).await?;
     if !pg_pass {
         all_pass = false;
@@ -129,7 +139,7 @@ async fn run_check_leak(tenant: Uuid, skip_neo4j: bool, skip_qdrant: bool) -> Re
     if skip_neo4j {
         println!("[SKIP] Neo4j check skipped (--skip-neo4j).");
     } else {
-        let neo4j_pass = check_neo4j_empty(tenant).await;
+        let neo4j_pass = check_neo4j_empty(&neo4j_label).await;
         if !neo4j_pass {
             all_pass = false;
         }
@@ -142,13 +152,32 @@ async fn run_check_leak(tenant: Uuid, skip_neo4j: bool, skip_qdrant: bool) -> Re
     if skip_qdrant {
         println!("[SKIP] Qdrant check skipped (--skip-qdrant).");
     } else {
-        let qdrant_pass = check_qdrant_collection_gone(tenant).await;
+        let qdrant_pass = check_qdrant_collection_gone(&qdrant_collection).await;
         if !qdrant_pass {
             all_pass = false;
         }
     }
 
     Ok(all_pass)
+}
+
+// ---------------------------------------------------------------------------
+// Tenant identifier derivation
+// ---------------------------------------------------------------------------
+
+/// Derives the Qdrant collection name for a tenant using the same `bytes[4..]`
+/// derivation as `rb-storage-neo4j::tenant_label` and `rb-tenant::TenantCtx`.
+///
+/// Format: `tenant_<24 lowercase hex chars>_embeddings`
+fn qdrant_collection_name(tenant_id: &TenantId) -> String {
+    let uuid = tenant_id.as_uuid();
+    let bytes = uuid.as_bytes();
+    let mut hex = String::with_capacity(24);
+    for b in &bytes[4..] {
+        use std::fmt::Write as _;
+        write!(hex, "{b:02x}").expect("infallible write to String");
+    }
+    format!("tenant_{hex}_embeddings")
 }
 
 // ------------------------------------------------------------------
@@ -264,13 +293,12 @@ async fn check_audit_trail_present(pool: &sqlx::PgPool, tenant: Uuid) -> Result<
 // Neo4j helper (HTTP Cypher API)
 // ------------------------------------------------------------------
 
-async fn check_neo4j_empty(tenant: Uuid) -> bool {
+async fn check_neo4j_empty(label: &str) -> bool {
     let base = std::env::var("NEO4J_HTTP_URL")
         .unwrap_or_else(|_| "http://localhost:7474".to_owned());
     let user = std::env::var("NEO4J_USER").unwrap_or_else(|_| "neo4j".to_owned());
     let pass = std::env::var("NEO4J_PASS").unwrap_or_else(|_| "neo4j".to_owned());
 
-    let label = format!("Tenant_{}", tenant.simple());
     let cypher = format!("MATCH (n:`{label}`) RETURN count(n) AS cnt");
     let body = serde_json::json!({ "statements": [{ "statement": cypher }] });
 
@@ -320,10 +348,9 @@ async fn check_neo4j_empty(tenant: Uuid) -> bool {
 // Qdrant helper (REST API)
 // ------------------------------------------------------------------
 
-async fn check_qdrant_collection_gone(tenant: Uuid) -> bool {
+async fn check_qdrant_collection_gone(collection: &str) -> bool {
     let base = std::env::var("QDRANT_URL")
         .unwrap_or_else(|_| "http://localhost:6333".to_owned());
-    let collection = format!("tenant_{}_embeddings", tenant.simple());
     let url = format!("{base}/collections/{collection}");
 
     let client = reqwest::Client::new();
@@ -359,29 +386,56 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tenant_simple_format() {
-        let tenant = Uuid::nil();
-        let schema = format!("tenant_{}", tenant.simple());
-        // Simple UUID is 32 hex chars, no dashes.
-        assert_eq!(schema.len(), "tenant_".len() + 32);
+    fn pg_schema_uses_24_hex_suffix() {
+        let tenant = TenantId::from(Uuid::nil());
+        let ctx = TenantCtx::new(tenant);
+        let schema = ctx.schema_name();
+        // "tenant_" (7) + 24 hex = 31 chars, no dashes.
+        assert_eq!(schema.len(), 31);
         assert!(!schema.contains('-'));
+        assert!(schema.starts_with("tenant_"));
     }
 
     #[test]
-    fn neo4j_label_format() {
-        let tenant = Uuid::nil();
-        let label = format!("Tenant_{}", tenant.simple());
+    fn neo4j_label_uses_24_hex_suffix() {
+        let tenant_id = TenantId::from(Uuid::nil());
+        let label = tenant_label(&tenant_id);
+        // "Tenant_" (7) + 24 hex = 31 chars.
+        assert_eq!(label.len(), 31);
         assert!(label.starts_with("Tenant_"));
         assert!(!label.contains('-'));
     }
 
     #[test]
-    fn qdrant_collection_format() {
-        let tenant = Uuid::nil();
-        let coll = format!("tenant_{}_embeddings", tenant.simple());
+    fn qdrant_collection_uses_24_hex_suffix() {
+        let tenant_id = TenantId::from(Uuid::nil());
+        let coll = qdrant_collection_name(&tenant_id);
+        // "tenant_" (7) + 24 hex + "_embeddings" (11) = 42 chars.
+        assert_eq!(coll.len(), 42);
         assert!(coll.starts_with("tenant_"));
         assert!(coll.ends_with("_embeddings"));
         assert!(!coll.contains('-'));
+    }
+
+    /// Cross-crate regression: all three derivations must use the same 24-hex
+    /// suffix so that the CLI checks the same tenant space the storage layers write to.
+    #[test]
+    fn all_derivations_share_same_24_hex_core() {
+        let uuid = Uuid::new_v4();
+        let tenant_id = TenantId::from(uuid);
+        let ctx = TenantCtx::new(tenant_id);
+
+        let schema = ctx.schema_name(); // tenant_<24hex>
+        let label = tenant_label(&tenant_id); // Tenant_<24hex>
+        let coll = qdrant_collection_name(&tenant_id); // tenant_<24hex>_embeddings
+
+        let hex_from_schema = &schema["tenant_".len()..];
+        let hex_from_label = &label["Tenant_".len()..];
+        let hex_from_coll = &coll["tenant_".len()..coll.len() - "_embeddings".len()];
+
+        assert_eq!(hex_from_schema, hex_from_label, "PG schema hex != Neo4j label hex");
+        assert_eq!(hex_from_schema, hex_from_coll, "PG schema hex != Qdrant collection hex");
+        assert_eq!(hex_from_schema.len(), 24, "hex suffix must be exactly 24 chars");
     }
 
     #[test]

@@ -3212,6 +3212,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "projector-pg"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "metrics",
+ "metrics-util 0.18.0",
+ "rb-kafka",
+ "rb-schemas",
+ "rb-storage-pg",
+ "rb-tenant",
+ "rb-tracing",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "prost"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

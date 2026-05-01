@@ -99,7 +99,7 @@ pub async fn run(config: Config) -> Result<()> {
     // not prevent the HTTP server from starting — the SSE endpoint degrades
     // gracefully when Kafka is unavailable (no events; long-poll returns empty).
     let consumer_cfg = ConsumerCfg::new("control-api-sse");
-    match ingest_consumer::spawn(&consumer_cfg, sse_bus) {
+    match ingest_consumer::spawn(&consumer_cfg, sse_bus, Arc::new(state.pool.clone())) {
         Ok(_handle) => tracing::info!("ingest_consumer started"),
         Err(e) => tracing::warn!("ingest_consumer failed to start (Kafka unavailable?): {e}"),
     }

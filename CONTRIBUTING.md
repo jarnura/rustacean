@@ -1,5 +1,15 @@
 # Contributing
 
+## First-time setup
+
+After cloning, install the local git hooks once:
+
+```bash
+make install-hooks
+```
+
+This installs a `pre-push` hook that runs the bundle detector before every push. It is safe to re-run and will overwrite stale hooks.
+
 ## Before pushing any branch
 
 Run `make review-ready` from the repo root before opening a PR. It runs `cargo fmt --check`, `cargo clippy`, the full workspace test suite, `cargo deny check`, and an OpenAPI freshness check — and also runs `pnpm lint`, `pnpm typecheck`, and `pnpm test` automatically if your branch touches `frontend/`. All steps execute even if earlier ones fail so you see the complete picture in one pass. Fix everything flagged before pushing; PRs that fail these checks are returned without review.
@@ -41,6 +51,29 @@ git push --force-with-lease
 ```
 
 This is the deliberate policy — rebase to ship. You will know a rule change landed on `main` (but not on your branch) when the CI error references a pattern that differs from what you see in `.github/workflows/pr-hygiene.yml` on your branch.
+
+## One issue per PR (bundle policy)
+
+Each PR must address exactly one tracker issue. The `pr-bundle-check` CI gate and the `pre-push` git hook both enforce this.
+
+**What counts as a bundle violation:**
+- A PR whose title names more than one issue.
+- A PR whose body or commits mention an issue not declared in the title.
+- A push whose commit messages reference more than one distinct issue.
+
+**Waiver (board or CTO approval required):** if you have explicit approval to land multiple issues together, add this trailer to one of your commits before pushing:
+
+```
+bundle-waiver: board
+```
+
+or
+
+```
+bundle-waiver: cto
+```
+
+CI will verify the trailer value is an authorized role (`board` or `cto`). Without a valid waiver the push and the PR check both fail.
 
 ## Getting started
 

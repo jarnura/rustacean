@@ -41,6 +41,7 @@ else
     RESULTS+=("FAIL  branch name")
 fi
 
+step "bundle check"         "bash scripts/check-no-bundle.sh --range \$(git merge-base HEAD main 2>/dev/null || echo main)..HEAD"
 step "cargo fmt --check"    "cargo fmt --all -- --check"
 step "cargo clippy"         "cargo clippy --all-targets --all-features -- -D warnings"
 step "cargo test"           "cargo test --workspace --all-features"
@@ -62,6 +63,13 @@ done
 echo "==============================="
 
 [ "$FAIL" -eq 0 ] && echo "ALL CHECKS PASSED" || echo "$FAIL check(s) FAILED"
+
+# --- Hook installation reminder --------------------------------------------
+if [[ ! -x ".git/hooks/pre-push" ]]; then
+    echo ""
+    echo "NOTE: pre-push hook not installed. Run  make install-hooks  once to enable"
+    echo "      the bundle detector on every push."
+fi
 
 # --- PR title reminder -----------------------------------------------------
 # Always print the required format; derive a suggestion from the branch slug.

@@ -94,7 +94,9 @@ test.describe("Ingestion Theatre — live events", () => {
 
     const cloneItem = page.getByRole("listitem").filter({ hasText: "clone" });
     await expect(cloneItem).toBeVisible();
-    await expect(cloneItem.getByText("Running")).toBeVisible();
+    await expect(
+      cloneItem.getByRole("img", { name: "clone stage: Running" }),
+    ).toBeVisible();
   });
 
   test("done event flips all stages to done", async ({ page }) => {
@@ -112,7 +114,9 @@ test.describe("Ingestion Theatre — live events", () => {
     const stages = ["clone", "expand", "parse", "typecheck", "graph", "embed"];
     for (const stage of stages) {
       const item = page.getByRole("listitem").filter({ hasText: stage });
-      await expect(item.getByText("Done")).toBeVisible();
+      await expect(
+        item.getByRole("img", { name: `${stage} stage: Done` }),
+      ).toBeVisible();
     }
   });
 

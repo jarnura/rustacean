@@ -1,9 +1,11 @@
 //! `POST /v1/repos/{repo_id}/ingestions` — Manual ingestion trigger (REQ-IN-01).
 //!
-//! Inserts an `ingestion_runs` row and 9 `pipeline_stage_runs` rows in a single
-//! transaction, then emits an `IngestRequest` to `rb.ingest.clone.commands`.
+//! Publishes an `IngestRequest` to `rb.ingest.clone.commands`, then commits
+//! an `ingestion_runs` row and 9 `pipeline_stage_runs` rows atomically.
+//! Rollback is guaranteed if the Kafka publish fails — no orphan rows.
 //! Returns 202 Accepted with `{ ingest_run_id }` within 200ms.
 //! Returns 409 if a run is already queued or running for this repo.
+//! Returns 503 if the Kafka broker is unreachable (librdkafka lazy-connect).
 
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use rb_kafka::EventEnvelope;
@@ -114,8 +116,27 @@ pub async fn trigger_ingestion(
     let run_id = Uuid::new_v4();
     let event_id = Uuid::new_v4();
 
-    // 3. Insert ingestion_run + pipeline_stage_runs in a single transaction so
-    //    we never have a partial set of rows visible to the status fan-out.
+    // 3. Build the Kafka envelope before opening the transaction (pure in-memory,
+    //    no I/O). This lets us publish to Kafka while still inside the transaction
+    //    and rollback cleanly if the broker is unavailable.
+    let ingest_req = IngestRequest {
+        tenant_id: session.tenant_id.to_string(),
+        event_id: event_id.to_string(),
+        source: "api".to_string(),
+        payload: vec![],
+        created_at_ms: chrono::Utc::now().timestamp_millis(),
+        repo_id: repo_id.to_string(),
+        ingest_run_id: run_id.to_string(),
+        commit_sha: body.commit_sha.unwrap_or_default(),
+        branch: body.branch.unwrap_or_default(),
+    };
+    let envelope =
+        EventEnvelope::new(TenantId::from(session.tenant_id), ingest_req).with_event_id(event_id);
+    let partition_key = format!("{}.{}", session.tenant_id, repo_id);
+
+    // 4. Insert ingestion_run + pipeline_stage_runs in a single transaction.
+    //    Do NOT commit until after Kafka publish succeeds — rollback on publish
+    //    failure guarantees no orphan ingestion_runs rows.
     let mut txn = state.pool.begin().await?;
 
     sqlx::query(
@@ -143,44 +164,18 @@ pub async fn trigger_ingestion(
         .await?;
     }
 
-    txn.commit().await?;
-
-    // 4. Publish IngestRequest to rb.ingest.clone.commands.
-    //    If publish fails, mark the run failed so the 409 check doesn't block
-    //    future attempts.
-    let ingest_req = IngestRequest {
-        tenant_id: session.tenant_id.to_string(),
-        event_id: event_id.to_string(),
-        source: "api".to_string(),
-        payload: vec![],
-        created_at_ms: chrono::Utc::now().timestamp_millis(),
-        repo_id: repo_id.to_string(),
-        ingest_run_id: run_id.to_string(),
-        commit_sha: body.commit_sha.unwrap_or_default(),
-        branch: body.branch.unwrap_or_default(),
-    };
-
-    let envelope =
-        EventEnvelope::new(TenantId::from(session.tenant_id), ingest_req).with_event_id(event_id);
-
-    let partition_key = format!("{}.{}", session.tenant_id, repo_id);
-
+    // 5. Publish IngestRequest to rb.ingest.clone.commands before committing.
+    //    On failure: rollback the transaction — no rows are persisted, no orphans.
     if let Err(e) = producer
         .publish(CLONE_COMMANDS_TOPIC, partition_key.as_bytes(), envelope)
         .await
     {
-        // Rollback: mark run failed so future triggers aren't blocked.
-        let _ = sqlx::query(
-            "UPDATE control.ingestion_runs SET status = 'failed', \
-             error = 'kafka publish failed at trigger' \
-             WHERE id = $1",
-        )
-        .bind(run_id)
-        .execute(&state.pool)
-        .await;
-
+        txn.rollback().await.ok();
         return Err(AppError::KafkaPublish(e));
     }
+
+    // 6. Kafka publish succeeded — commit atomically.
+    txn.commit().await?;
 
     tracing::info!(
         %run_id,
@@ -272,5 +267,27 @@ mod tests {
         let err = AppError::IngestRunAlreadyInFlight;
         let resp = err.into_response();
         assert_eq!(resp.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn kafka_broker_unavailable_returns_503() {
+        use rb_kafka::KafkaError;
+        // AllBrokersDown is the canonical librdkafka code for lazy-connect
+        // failures — validate it surfaces as 503, not 500.
+        let rdkafka_err = rdkafka::error::KafkaError::MessageProduction(
+            rdkafka::error::RDKafkaErrorCode::AllBrokersDown,
+        );
+        let err = AppError::KafkaPublish(KafkaError::Rdkafka(rdkafka_err));
+        let resp = err.into_response();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn kafka_non_availability_error_returns_500() {
+        use rb_kafka::KafkaError;
+        // Serialization failures are internal errors, not broker-availability.
+        let err = AppError::KafkaPublish(KafkaError::Serialization("bad proto".to_owned()));
+        let resp = err.into_response();
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }

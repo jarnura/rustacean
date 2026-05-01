@@ -61,6 +61,8 @@ http-body-util = "0.1"
 hmac.workspace = true
 sha2.workspace = true
 hex.workspace = true
+# Construct rdkafka error variants in unit tests (e.g. AllBrokersDown → 503).
+rdkafka.workspace = true
 
 [lints]
 workspace = true

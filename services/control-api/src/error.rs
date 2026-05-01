@@ -131,6 +131,11 @@ impl IntoResponse for AppError {
                 "kafka_not_configured",
                 self.to_string(),
             ),
+            AppError::KafkaPublish(e) if e.is_broker_unavailable() => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "kafka_unavailable",
+                "Kafka broker is not available; try again later".to_owned(),
+            ),
             AppError::KafkaPublish(e) => {
                 tracing::error!(error = %e, "kafka publish error");
                 (

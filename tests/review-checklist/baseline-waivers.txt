@@ -1,0 +1,13 @@
+# Baseline waivers for known pre-existing issues that are NOT introduced by
+# any single PR.  The CI review-checklist job uses this file so the job stays
+# green while these issues are tracked and fixed independently.
+#
+# Each line must match the waiver format parsed by review-checklist.sh:
+#   reviewer-waiver: <check-id> — <reason>
+#
+# To fix a waiver: remove the line here, fix the underlying issue, verify
+# `make review-checklist` passes, then open a PR.
+
+# rb-kafka metrics (rb_kafka_*) were shipped without DebuggingRecorder value
+# tests.  Tracked as tech-debt follow-up to RUSAA-367 (ADR-006 §15.1).
+reviewer-waiver: check-7 — rb-kafka metric value coverage is pre-existing tech debt; tracked as follow-up to RUSAA-367

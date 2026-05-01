@@ -175,6 +175,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── Reviewer checklist ────────────────────────────────────────────────────
+
+  review-checklist:
+    name: reviewer checklist (semantic catches)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install rdkafka build dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y cmake libssl-dev libsasl2-dev zlib1g-dev libcurl4-openssl-dev
+      - name: Run reviewer checklist (skip docker smoke in CI)
+        run: SKIP_DOCKER=1 WAIVER_FILE=tests/review-checklist/baseline-waivers.txt make review-checklist
+
+  review-checklist-fixtures:
+    name: reviewer checklist fixtures
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run checker fixture tests (PASS/FAIL logic verification)
+        run: make review-checklist-fixtures
+
   # ── Stub jobs (wired in later waves) ──────────────────────────────────────
 
   docker-build:

@@ -3212,6 +3212,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "projector-neo4j"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "metrics",
+ "rb-kafka",
+ "rb-schemas",
+ "rb-storage-neo4j",
+ "rb-tracing",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "projector-pg"
 version = "0.1.0"
 dependencies = [

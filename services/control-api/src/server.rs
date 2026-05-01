@@ -7,7 +7,7 @@ use jsonwebtoken::EncodingKey;
 use rb_auth::{LoginRateLimiter, PasswordHasher};
 use rb_email::{SmtpConfig, from_transport};
 use rb_github::{GhApp, Secret};
-use rb_kafka::ConsumerCfg;
+use rb_kafka::{ConsumerCfg, Producer, ProducerCfg};
 use rb_sse::{EventBus, SseConfig};
 use sqlx::postgres::PgPoolOptions;
 use tower_http::{
@@ -67,6 +67,23 @@ pub async fn run(config: Config) -> Result<()> {
 
     let sse_bus = Arc::new(EventBus::new(SseConfig::default()));
 
+    // Build the Kafka ingestion producer.  Failure is non-fatal — the route
+    // returns 503 when the producer is absent (graceful degradation).
+    let producer_cfg = ProducerCfg {
+        bootstrap_servers: config.kafka_bootstrap_servers.clone(),
+        ..ProducerCfg::default()
+    };
+    let ingest_producer = match Producer::new(&producer_cfg) {
+        Ok(p) => {
+            tracing::info!("ingest_producer connected to Kafka");
+            Some(Arc::new(p))
+        }
+        Err(e) => {
+            tracing::warn!("ingest_producer failed to connect (Kafka unavailable?): {e}");
+            None
+        }
+    };
+
     let state = AppState {
         pool,
         email_sender: Arc::from(email_sender),
@@ -75,6 +92,7 @@ pub async fn run(config: Config) -> Result<()> {
         config: Arc::new(config.clone()),
         gh,
         sse_bus: Arc::clone(&sse_bus),
+        ingest_producer,
     };
 
     // Spawn the Kafka → SSE fan-out consumer.  Errors here are logged but do

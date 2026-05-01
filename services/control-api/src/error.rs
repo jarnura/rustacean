@@ -3,6 +3,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use rb_kafka::KafkaError;
 use serde_json::json;
 use thiserror::Error;
 
@@ -53,6 +54,10 @@ pub enum AppError {
     RepoAlreadyConnected,
     #[error("an ingestion run is already in progress for this repository")]
     IngestRunAlreadyInFlight,
+    #[error("Kafka producer is not configured on this instance")]
+    KafkaNotConfigured,
+    #[error("failed to publish ingestion event to Kafka: {0}")]
+    KafkaPublish(#[from] KafkaError),
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
     #[error("auth error: {0}")]
@@ -120,6 +125,19 @@ impl IntoResponse for AppError {
                 "ingest_run_already_in_flight",
                 self.to_string(),
             ),
+            AppError::KafkaNotConfigured => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "kafka_not_configured",
+                self.to_string(),
+            ),
+            AppError::KafkaPublish(e) => {
+                tracing::error!(error = %e, "kafka publish error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "kafka_publish_error",
+                    "failed to queue ingestion event".to_owned(),
+                )
+            }
             AppError::Database(e) => {
                 tracing::error!(error = %e, "database error");
                 (

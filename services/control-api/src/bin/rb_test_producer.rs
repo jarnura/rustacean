@@ -53,6 +53,7 @@ async fn main() -> Result<()> {
             status: IngestStatus::Processing as i32, // synthetic — shows pipeline is active
             error_message: String::new(),
             occurred_at_ms: chrono::Utc::now().timestamp_millis(),
+            ..Default::default()
         };
 
         let envelope = EventEnvelope {

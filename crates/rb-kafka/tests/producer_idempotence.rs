@@ -11,6 +11,7 @@ fn make_event(tenant_id: TenantId, event_id: Uuid) -> EventEnvelope<IngestStatus
             status: IngestStatus::Processing as i32,
             error_message: String::new(),
             occurred_at_ms: 0,
+            ..Default::default()
         },
     )
     .with_event_id(event_id)

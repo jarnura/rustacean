@@ -17,6 +17,7 @@ fn make_event(tenant_id: TenantId) -> EventEnvelope<IngestStatusEvent> {
             status: IngestStatus::Failed as i32,
             error_message: "transient".to_owned(),
             occurred_at_ms: 0,
+            ..Default::default()
         },
     )
 }

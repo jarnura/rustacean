@@ -1,11 +1,15 @@
 use uuid::Uuid;
 
 mod ingest {
-    #![allow(clippy::all, clippy::pedantic)]
+    #![allow(clippy::all, clippy::pedantic, dead_code)]
     include!(concat!(env!("OUT_DIR"), "/rust_brain.v1.rs"));
 }
 
-pub use ingest::{IngestRequest, IngestStatus, IngestStatusEvent};
+pub use ingest::{
+    AuditEvent, EmbeddingPendingEvent, ExpandedFileEvent, GraphRelationEvent, IngestRequest,
+    IngestStage, IngestStatus, IngestStatusEvent, ItemKind, ParsedItemEvent, RelationKind,
+    SourceFileEvent, Tombstone, TypecheckedItemEvent,
+};
 
 /// Newtype over [`Uuid`] representing a tenant identifier.
 /// Prost-generated event types are re-exported from this crate (see [`IngestRequest`] etc.).
@@ -77,9 +81,14 @@ mod tests {
             source: "github".to_string(),
             payload: vec![1, 2, 3],
             created_at_ms: 1_700_000_000_000,
+            repo_id: "repo-uuid".to_string(),
+            ingest_run_id: "run-uuid".to_string(),
+            commit_sha: "abc123".to_string(),
+            branch: "main".to_string(),
         };
         assert_eq!(req.source, "github");
         assert_eq!(req.payload, vec![1u8, 2, 3]);
+        assert_eq!(req.repo_id, "repo-uuid");
     }
 
     #[test]
@@ -103,8 +112,74 @@ mod tests {
             status: IngestStatus::Processing as i32,
             error_message: String::new(),
             occurred_at_ms: 1_700_000_001_000,
+            stage: IngestStage::Clone as i32,
+            stage_seq: 1,
+            ingest_run_id: "run-uuid".to_string(),
+            attempt: 0,
         };
         assert_eq!(ev.status, IngestStatus::Processing as i32);
         assert!(ev.error_message.is_empty());
+        assert_eq!(ev.stage, IngestStage::Clone as i32);
+    }
+
+    #[test]
+    fn audit_event_fields_accessible() {
+        let ev = AuditEvent {
+            schema_version: "rust_brain.v1".to_string(),
+            event_id: "evt-789".to_string(),
+            tenant_id: "tenant-1".to_string(),
+            action: "ingest.stage.started".to_string(),
+            outcome: "success".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(ev.schema_version, "rust_brain.v1");
+        assert_eq!(ev.action, "ingest.stage.started");
+    }
+
+    #[test]
+    fn ingest_stage_nine_variants() {
+        let stages = [
+            IngestStage::Clone,
+            IngestStage::Expand,
+            IngestStage::Parse,
+            IngestStage::Typecheck,
+            IngestStage::Extract,
+            IngestStage::Embed,
+            IngestStage::ProjectPg,
+            IngestStage::ProjectNeo4j,
+            IngestStage::ProjectQdrant,
+        ];
+        assert_eq!(stages.len(), 9);
+    }
+
+    #[test]
+    fn ingest_stage_unspecified_is_zero() {
+        assert_eq!(IngestStage::Unspecified as i32, 0);
+    }
+
+    #[test]
+    fn pipeline_source_file_event_accessible() {
+        let ev = SourceFileEvent {
+            ingest_run_id: "run-1".to_string(),
+            tenant_id: "tenant-1".to_string(),
+            repo_id: "repo-1".to_string(),
+            relative_path: "src/main.rs".to_string(),
+            sha256: "abc".to_string(),
+            size_bytes: 1024,
+            emitted_at_ms: 0,
+            body: None,
+        };
+        assert_eq!(ev.relative_path, "src/main.rs");
+    }
+
+    #[test]
+    fn tombstone_accessible() {
+        let t = Tombstone {
+            tenant_id: "t".to_string(),
+            repo_id: "r".to_string(),
+            requested_by: "u".to_string(),
+            emitted_at_ms: 0,
+        };
+        assert_eq!(t.tenant_id, "t");
     }
 }

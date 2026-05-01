@@ -9,10 +9,14 @@ fn main() {
         .expect("workspace root");
     let proto_root = workspace_root.join("proto");
     let ingest_proto = proto_root.join("rust_brain/v1/ingest.proto");
+    let audit_proto = proto_root.join("rust_brain/v1/audit.proto");
+    let pipeline_proto = proto_root.join("rust_brain/v1/pipeline.proto");
 
     println!("cargo:rerun-if-changed={}", ingest_proto.display());
+    println!("cargo:rerun-if-changed={}", audit_proto.display());
+    println!("cargo:rerun-if-changed={}", pipeline_proto.display());
 
-    let fds = protox::compile([&ingest_proto], [&proto_root])
+    let fds = protox::compile([&ingest_proto, &audit_proto, &pipeline_proto], [&proto_root])
         .expect("protobuf compilation failed");
 
     prost_build::Config::new()

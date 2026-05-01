@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package rust_brain.v1;
+
+import "rust_brain/v1/ingest.proto";
+
+// ── Per-stage payload messages (ADR-007 §3.4) ────────────────────────────────
+// All messages share the envelope-vs-pointer pattern from ADR-006 §5.2.
+// `inline_payload` is for ≤1 MiB content; larger content uses `blob_ref`.
+
+message SourceFileEvent {
+  string ingest_run_id  = 1;
+  string tenant_id      = 2;
+  string repo_id        = 3;
+  // Relative path from repo root, e.g. "src/main.rs".
+  string relative_path  = 4;
+  // SHA-256 hex digest of the file content; projector idempotency key.
+  string sha256         = 5;
+  oneof body {
+    bytes  inline_payload = 6;
+    // rb-blob pointer: rb-blob://tenant_<id>/<sha256>
+    string blob_ref       = 7;
+  }
+  int64 size_bytes      = 8;
+  int64 emitted_at_ms   = 9;
+}
+
+message ExpandedFileEvent {
+  string ingest_run_id  = 1;
+  string tenant_id      = 2;
+  string repo_id        = 3;
+  string relative_path  = 4;
+  string sha256         = 5;
+  oneof body {
+    bytes  inline_payload = 6;
+    string blob_ref       = 7;
+  }
+  int64  size_bytes      = 8;
+  int64  emitted_at_ms   = 9;
+  // SHA-256 of the pre-expand source file this was derived from.
+  string source_sha256   = 10;
+  // Resolved Cargo feature set used for this expansion.
+  repeated string features = 11;
+}
+
+message ParsedItemEvent {
+  string ingest_run_id  = 1;
+  string tenant_id      = 2;
+  string repo_id        = 3;
+  // Fully-qualified name; projector idempotency key.
+  string fqn            = 4;
+  ItemKind kind         = 5;
+  oneof body {
+    bytes  inline_payload = 6;
+    string blob_ref       = 7;
+  }
+  string source_path    = 8;
+  int32  line_start     = 9;
+  int32  line_end       = 10;
+  int64  emitted_at_ms  = 11;
+}
+
+message TypecheckedItemEvent {
+  string ingest_run_id          = 1;
+  string tenant_id              = 2;
+  string repo_id                = 3;
+  string fqn                    = 4;
+  oneof body {
+    bytes  inline_payload = 5;
+    string blob_ref       = 6;
+  }
+  string resolved_type_signature = 7;
+  repeated string trait_bounds   = 8;
+  int64  emitted_at_ms           = 9;
+}
+
+message GraphRelationEvent {
+  string ingest_run_id = 1;
+  string tenant_id     = 2;
+  string repo_id       = 3;
+  string from_fqn      = 4;
+  string to_fqn        = 5;
+  RelationKind kind    = 6;
+  int64  emitted_at_ms = 7;
+}
+
+message EmbeddingPendingEvent {
+  string ingest_run_id    = 1;
+  string tenant_id        = 2;
+  string repo_id          = 3;
+  string fqn              = 4;
+  // Value of RB_EMBEDDING_MODEL at production time.
+  string embedding_model  = 5;
+  // Qdrant collection dimensions; validated at startup.
+  int32  dimensions       = 6;
+  int64  emitted_at_ms    = 7;
+}
+
+// Emitted to rb.tombstones.v1 to delete all projections for a (tenant, repo) pair.
+message Tombstone {
+  string tenant_id    = 1;
+  // Empty string means tenant-wide deletion.
+  string repo_id      = 2;
+  // UUID of the requesting user (audit trail).
+  string requested_by = 3;
+  int64  emitted_at_ms = 4;
+}
+
+// ── Item kind enum (ADR-007 §3.5.2 rev 2) ────────────────────────────────────
+enum ItemKind {
+  ITEM_KIND_UNSPECIFIED = 0;
+  // Concrete items (rev 1 — stable tags)
+  FN          = 1;
+  STRUCT      = 2;
+  ENUM        = 3;
+  TRAIT       = 4;
+  IMPL        = 5;
+  MOD         = 6;
+  CONST       = 7;
+  // Generic surface (rev 2 additions — tags ≥8)
+  TRAIT_METHOD    = 8;
+  IMPL_BLOCK      = 9;
+  ASSOC_TYPE      = 10;
+  ASSOC_CONST     = 11;
+  TYPE_PARAM      = 12;
+  LIFETIME_PARAM  = 13;
+  CONST_PARAM     = 14;
+  WHERE_PREDICATE = 15;
+  // Dynamic dispatch + monomorphization (rev 2 additions — tags ≥16)
+  DYN_TRAIT_USAGE = 16;
+  TYPE_INSTANCE   = 17;
+  MACRO_DEF       = 18;
+}
+
+// ── Relation kind enum (ADR-007 §3.5.3 rev 2) ────────────────────────────────
+enum RelationKind {
+  RELATION_KIND_UNSPECIFIED = 0;
+  // Base set (rev 1 — stable tags)
+  CALLS        = 1;
+  IMPLS        = 2;
+  USES_TYPE    = 3;
+  IMPORTS      = 4;
+  DERIVES      = 5;
+  // Generics + traits (rev 2 additions — tags ≥6)
+  BOUNDED_BY             = 6;
+  WHERE_CLAUSE_PREDICATE = 7;
+  EXTENDS_TRAIT          = 8;
+  BLANKET_IMPL_FOR       = 9;
+  ASSOC_TYPE_BINDING     = 10;
+  HAS_TYPE_PARAM         = 11;
+  HAS_LIFETIME_PARAM     = 12;
+  HAS_CONST_PARAM        = 13;
+  // Monomorphization (rev 2 additions — tags ≥14)
+  MONOMORPHIZED_FROM = 14;
+  TYPE_ARG_BINDS     = 15;
+  CALL_INSTANTIATES  = 16;
+  // Macro provenance (rev 2 addition — tag 17)
+  MACRO_GENERATED_BY = 17;
+  // Dynamic dispatch (rev 2 addition — tags ≥18)
+  DYN_DISPATCH_CANDIDATE = 18;
+  ERASED_INTO            = 19;
+}

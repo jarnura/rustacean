@@ -411,6 +411,31 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/repos/{repo_id}/ingestions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Trigger a manual ingestion run for a connected repository.
+         * @description Creates an `ingestion_runs` row (status `queued`) and one
+         *     `pipeline_stage_runs` row per stage (status `pending`), then publishes an
+         *     `IngestRequest` to `rb.ingest.clone.commands`.
+         *
+         *     Returns 409 if an ingestion is already queued or running for this repo.
+         *     Returns 503 if the Kafka producer is unavailable.
+         */
+        readonly post: operations["trigger_ingestion"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/tenants/{id}/members": {
         readonly parameters: {
             readonly query?: never;
@@ -753,6 +778,22 @@ export interface components {
             /** Format: uuid */
             readonly run_id: string;
             readonly status: string;
+        };
+        readonly TriggerIngestionRequest: {
+            /**
+             * @description Target branch name. Optional; clone stage falls back to the repo's
+             *     `default_branch` when both `commit_sha` and `branch` are absent.
+             */
+            readonly branch?: string | null;
+            /**
+             * @description Target commit SHA. Optional; if omitted the clone stage resolves the
+             *     branch HEAD.
+             */
+            readonly commit_sha?: string | null;
+        };
+        readonly TriggerIngestionResponse: {
+            /** Format: uuid */
+            readonly ingest_run_id: string;
         };
         readonly UpdateRoleRequest: {
             /** @description Target role: `member` or `admin`. Cannot set `owner` via this endpoint. */
@@ -1557,6 +1598,68 @@ export interface operations {
             };
             /** @description Ingestion run already in-flight (ingest_run_already_in_flight) */
             readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly trigger_ingestion: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description Repository UUID */
+                readonly repo_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                readonly "application/json": components["schemas"]["TriggerIngestionRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Ingestion run queued */
+            readonly 202: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["TriggerIngestionResponse"];
+                };
+            };
+            /** @description Not authenticated or session expired */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email not verified */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Repository not found or belongs to another tenant */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ingestion already in-flight (ingest_run_already_in_flight) */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Kafka producer not available (kafka_not_configured, kafka_unavailable) */
+            readonly 503: {
                 headers: {
                     readonly [name: string]: unknown;
                 };

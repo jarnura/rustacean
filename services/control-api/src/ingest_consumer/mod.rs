@@ -1,294 +1,18 @@
+mod db;
+mod sse;
+
+#[cfg(test)]
+use db::{TOTAL_PIPELINE_STAGES, stage_db_params};
+#[cfg(test)]
+use sse::{IngestStatusEventJson, stage_label, status_label};
+
 use std::sync::Arc;
 
-use anyhow::{Context as _, Result};
-use rb_kafka::{Consumer, ConsumerCfg, TraceContext};
-use rb_schemas::{IngestStage, IngestStatus, IngestStatusEvent};
+use anyhow::Result;
+use rb_kafka::{Consumer, ConsumerCfg};
+use rb_schemas::IngestStatusEvent;
 use rb_sse::EventBus;
-use serde::Serialize;
 use sqlx::PgPool;
-use uuid::Uuid;
-
-const TOTAL_PIPELINE_STAGES: i64 = 9;
-
-/// JSON-serialisable mirror of [`IngestStatusEvent`] for SSE wire format.
-///
-/// `IngestStatusEvent` is prost-generated and does not implement [`Serialize`];
-/// this newtype bridges the gap without modifying generated code.
-#[derive(Debug, Serialize)]
-struct IngestStatusEventJson {
-    ingest_request_id: String,
-    tenant_id: String,
-    status: &'static str,
-    error_message: String,
-    occurred_at_ms: i64,
-    stage: Option<&'static str>,
-    stage_seq: i32,
-    ingest_run_id: String,
-}
-
-impl From<&IngestStatusEvent> for IngestStatusEventJson {
-    fn from(ev: &IngestStatusEvent) -> Self {
-        let status = IngestStatus::try_from(ev.status).map_or("unknown", status_label);
-        let stage = IngestStage::try_from(ev.stage).ok().and_then(stage_label);
-        Self {
-            ingest_request_id: ev.ingest_request_id.clone(),
-            tenant_id: ev.tenant_id.clone(),
-            status,
-            error_message: ev.error_message.clone(),
-            occurred_at_ms: ev.occurred_at_ms,
-            stage,
-            stage_seq: ev.stage_seq,
-            ingest_run_id: ev.ingest_run_id.clone(),
-        }
-    }
-}
-
-fn status_label(s: IngestStatus) -> &'static str {
-    match s {
-        IngestStatus::Unspecified => "unspecified",
-        IngestStatus::Pending => "pending",
-        IngestStatus::Processing => "processing",
-        IngestStatus::Done => "done",
-        IngestStatus::Failed => "failed",
-    }
-}
-
-fn stage_label(s: IngestStage) -> Option<&'static str> {
-    match s {
-        IngestStage::Unspecified => None,
-        IngestStage::Clone => Some("clone"),
-        IngestStage::Expand => Some("expand"),
-        IngestStage::Parse => Some("parse"),
-        IngestStage::Typecheck => Some("typecheck"),
-        IngestStage::Extract => Some("extract"),
-        IngestStage::Embed => Some("embed"),
-        IngestStage::ProjectPg => Some("project_pg"),
-        IngestStage::ProjectNeo4j => Some("project_neo4j"),
-        IngestStage::ProjectQdrant => Some("project_qdrant"),
-    }
-}
-
-/// Returns the `pipeline_stage_runs.status` string and optional error
-/// for a given [`IngestStatus`], or `None` if no DB update is warranted.
-fn stage_db_params(
-    status: IngestStatus,
-    error_message: &str,
-) -> Option<(&'static str, Option<String>)> {
-    match status {
-        IngestStatus::Processing => Some(("running", None)),
-        IngestStatus::Done => Some(("succeeded", None)),
-        IngestStatus::Failed => {
-            let err = if error_message.is_empty() {
-                None
-            } else {
-                Some(error_message.to_owned())
-            };
-            Some(("failed", err))
-        }
-        IngestStatus::Pending | IngestStatus::Unspecified => None,
-    }
-}
-
-/// `OTel` [`Extractor`] over a borrowed `&[(String, String)]` header list.
-struct HeaderExtractor<'a>(&'a [(String, String)]);
-
-impl opentelemetry::propagation::Extractor for HeaderExtractor<'_> {
-    fn get(&self, key: &str) -> Option<&str> {
-        self.0
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case(key))
-            .map(|(_, v)| v.as_str())
-    }
-
-    fn keys(&self) -> Vec<&str> {
-        self.0.iter().map(|(k, _)| k.as_str()).collect()
-    }
-}
-
-fn sse_publish_span(
-    tenant_id: &rb_schemas::TenantId,
-    tc: Option<&TraceContext>,
-) -> tracing::Span {
-    let _cx_guard = tc.map(|tc| {
-        let headers: Vec<(String, String)> = vec![
-            ("traceparent".to_owned(), tc.traceparent.clone()),
-            ("tracestate".to_owned(), tc.tracestate.clone()),
-        ];
-        opentelemetry::global::get_text_map_propagator(|prop| {
-            prop.extract(&HeaderExtractor(&headers))
-        })
-        .attach()
-    });
-
-    tracing::info_span!(
-        "sse.publish",
-        "otel.kind" = "PRODUCER",
-        "messaging.system" = "sse",
-        "messaging.destination" = "ingest.events",
-        "rb.tenant_id" = %tenant_id,
-    )
-}
-
-/// Update `pipeline_stage_runs` for the given run + stage transition.
-async fn update_stage_run(
-    pool: &PgPool,
-    ingest_run_id: &str,
-    stage: &str,
-    db_status: &str,
-    error: Option<String>,
-) -> Result<()> {
-    let run_id: Uuid = ingest_run_id
-        .parse()
-        .context("invalid ingest_run_id UUID")?;
-
-    match db_status {
-        "running" => {
-            sqlx::query(
-                "UPDATE control.pipeline_stage_runs \
-                 SET status = 'running', started_at = now() \
-                 WHERE ingestion_run_id = $1 AND stage = $2",
-            )
-            .bind(run_id)
-            .bind(stage)
-            .execute(pool)
-            .await
-            .context("failed to update pipeline_stage_runs to running")?;
-        }
-        "succeeded" => {
-            sqlx::query(
-                "UPDATE control.pipeline_stage_runs \
-                 SET status = 'succeeded', finished_at = now() \
-                 WHERE ingestion_run_id = $1 AND stage = $2",
-            )
-            .bind(run_id)
-            .bind(stage)
-            .execute(pool)
-            .await
-            .context("failed to update pipeline_stage_runs to succeeded")?;
-        }
-        "failed" => {
-            sqlx::query(
-                "UPDATE control.pipeline_stage_runs \
-                 SET status = 'failed', finished_at = now(), error = $3 \
-                 WHERE ingestion_run_id = $1 AND stage = $2",
-            )
-            .bind(run_id)
-            .bind(stage)
-            .bind(error.as_deref())
-            .execute(pool)
-            .await
-            .context("failed to update pipeline_stage_runs to failed")?;
-        }
-        other => {
-            tracing::warn!(db_status = other, "unknown stage db_status — skipping");
-        }
-    }
-
-    Ok(())
-}
-
-/// Transition `ingestion_runs` when a stage reports `Processing` (first signal
-/// that work has started: move from `queued` → `running`).
-async fn maybe_start_run(pool: &PgPool, ingest_run_id: &str) -> Result<()> {
-    let run_id: Uuid = ingest_run_id
-        .parse()
-        .context("invalid ingest_run_id UUID")?;
-
-    sqlx::query(
-        "UPDATE control.ingestion_runs \
-         SET status = 'running', started_at = COALESCE(started_at, now()) \
-         WHERE id = $1 AND status = 'queued'",
-    )
-    .bind(run_id)
-    .execute(pool)
-    .await
-    .context("failed to transition ingestion_run to running")?;
-
-    Ok(())
-}
-
-/// If all pipeline stages have succeeded, mark the run `succeeded`.
-async fn maybe_complete_run(pool: &PgPool, ingest_run_id: &str) -> Result<()> {
-    let run_id: Uuid = ingest_run_id
-        .parse()
-        .context("invalid ingest_run_id UUID")?;
-
-    let succeeded: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM control.pipeline_stage_runs \
-         WHERE ingestion_run_id = $1 AND status = 'succeeded'",
-    )
-    .bind(run_id)
-    .fetch_one(pool)
-    .await
-    .context("failed to count succeeded stages")?;
-
-    if succeeded >= TOTAL_PIPELINE_STAGES {
-        sqlx::query(
-            "UPDATE control.ingestion_runs \
-             SET status = 'succeeded', finished_at = now() \
-             WHERE id = $1 AND status = 'running'",
-        )
-        .bind(run_id)
-        .execute(pool)
-        .await
-        .context("failed to mark ingestion_run succeeded")?;
-    }
-
-    Ok(())
-}
-
-/// Mark `ingestion_runs` as `failed` on any stage failure.
-async fn fail_run(pool: &PgPool, ingest_run_id: &str, error_message: &str) -> Result<()> {
-    let run_id: Uuid = ingest_run_id
-        .parse()
-        .context("invalid ingest_run_id UUID")?;
-
-    let error = if error_message.is_empty() {
-        None
-    } else {
-        Some(error_message)
-    };
-
-    sqlx::query(
-        "UPDATE control.ingestion_runs \
-         SET status = 'failed', finished_at = now(), error = $2 \
-         WHERE id = $1 AND status IN ('queued', 'running')",
-    )
-    .bind(run_id)
-    .bind(error)
-    .execute(pool)
-    .await
-    .context("failed to mark ingestion_run failed")?;
-
-    Ok(())
-}
-
-/// Apply all DB updates for one [`IngestStatusEvent`].
-async fn handle_db_updates(pool: &PgPool, ev: &IngestStatusEvent) -> Result<()> {
-    let status = IngestStatus::try_from(ev.status).unwrap_or(IngestStatus::Unspecified);
-    let stage_opt = IngestStage::try_from(ev.stage).ok().and_then(stage_label);
-
-    if let Some(stage_str) = stage_opt {
-        if let Some((db_status, error)) = stage_db_params(status, &ev.error_message) {
-            update_stage_run(pool, &ev.ingest_run_id, stage_str, db_status, error).await?;
-        }
-    }
-
-    match status {
-        IngestStatus::Processing => {
-            maybe_start_run(pool, &ev.ingest_run_id).await?;
-        }
-        IngestStatus::Done => {
-            maybe_complete_run(pool, &ev.ingest_run_id).await?;
-        }
-        IngestStatus::Failed => {
-            fail_run(pool, &ev.ingest_run_id, &ev.error_message).await?;
-        }
-        IngestStatus::Pending | IngestStatus::Unspecified => {}
-    }
-
-    Ok(())
-}
 
 /// Spawn the long-running Kafka consumer task that subscribes to
 /// `rb.projector.events`, persists status transitions to Postgres, and fans
@@ -303,7 +27,7 @@ pub fn spawn(
     cfg: &ConsumerCfg,
     sse_bus: Arc<EventBus>,
     pool: Arc<PgPool>,
-) -> anyhow::Result<tokio::task::JoinHandle<()>> {
+) -> Result<tokio::task::JoinHandle<()>> {
     let consumer = Consumer::<IngestStatusEvent>::new(cfg)?;
     consumer.subscribe(&["rb.projector.events"])?;
 
@@ -322,9 +46,7 @@ pub fn spawn(
                     let ev = &envelope.payload;
                     let tenant_id = envelope.tenant_id;
 
-                    // Persist to DB before broadcasting; skip commit on error so
-                    // the message is redelivered on restart.
-                    if let Err(e) = handle_db_updates(&pool, ev).await {
+                    if let Err(e) = db::handle_db_updates(&pool, ev).await {
                         tracing::error!(
                             ingest_run_id = %ev.ingest_run_id,
                             "ingest_consumer: DB update failed: {e}"
@@ -333,11 +55,11 @@ pub fn spawn(
                         continue;
                     }
 
-                    let json_ev = IngestStatusEventJson::from(ev);
+                    let json_ev = sse::IngestStatusEventJson::from(ev);
                     match serde_json::to_string(&json_ev) {
                         Ok(data) => {
                             let span =
-                                sse_publish_span(&tenant_id, envelope.trace_context.as_ref());
+                                sse::sse_publish_span(&tenant_id, envelope.trace_context.as_ref());
                             span.in_scope(|| {
                                 sse_bus.publish_raw(&tenant_id, "ingest.status", data);
                             });
@@ -365,6 +87,8 @@ pub fn spawn(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rb_schemas::{IngestStage, IngestStatus};
+    use uuid::Uuid;
 
     // ── status_label ─────────────────────────────────────────────────────────
 
@@ -531,7 +255,11 @@ mod tests {
 
     #[test]
     fn json_ev_failed_has_error() {
-        let ev = make_event(IngestStatus::Failed as i32, IngestStage::Parse as i32, "oom");
+        let ev = make_event(
+            IngestStatus::Failed as i32,
+            IngestStage::Parse as i32,
+            "oom",
+        );
         let j = IngestStatusEventJson::from(&ev);
         assert_eq!(j.status, "failed");
         assert_eq!(j.error_message, "oom");
@@ -557,11 +285,7 @@ mod tests {
 
     #[test]
     fn json_ev_serialises_to_valid_json() {
-        let ev = make_event(
-            IngestStatus::Done as i32,
-            IngestStage::ProjectPg as i32,
-            "",
-        );
+        let ev = make_event(IngestStatus::Done as i32, IngestStage::ProjectPg as i32, "");
         let j = IngestStatusEventJson::from(&ev);
         let s = serde_json::to_string(&j).expect("should serialise");
         let v: serde_json::Value = serde_json::from_str(&s).expect("should parse");

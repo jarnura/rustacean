@@ -15,6 +15,7 @@ members = [
     "services/migrate",
     "services/control-api",
     "services/audit-worker",
+    "services/ingest-clone",
     "crates/rb-audit-cli",
     "crates/rb-storage-neo4j",
     "services/projector-pg",

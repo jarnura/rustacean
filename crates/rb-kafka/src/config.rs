@@ -19,7 +19,7 @@ impl Default for ProducerCfg {
         Self {
             bootstrap_servers: std::env::var("KAFKA_BOOTSTRAP_SERVERS")
                 .unwrap_or_else(|_| "kafka:9092".to_owned()),
-            compression_type: "zstd".to_owned(),
+            compression_type: "lz4".to_owned(),
             linger_ms: 20,
             delivery_timeout_ms: 120_000,
             queue_buffering_max_kbytes: 131_072,

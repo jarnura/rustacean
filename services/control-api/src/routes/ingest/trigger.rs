@@ -7,6 +7,8 @@
 //! Returns 409 if a run is already queued or running for this repo.
 //! Returns 503 if the Kafka broker is unreachable (librdkafka lazy-connect).
 
+use std::time::Duration;
+
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use rb_kafka::EventEnvelope;
 use rb_schemas::{IngestRequest, TenantId};
@@ -72,7 +74,7 @@ pub struct TriggerIngestionResponse {
         (status = 403, description = "Email not verified"),
         (status = 404, description = "Repository not found or belongs to another tenant"),
         (status = 409, description = "Ingestion already in-flight (ingest_run_already_in_flight)"),
-        (status = 503, description = "Kafka producer not available (kafka_not_configured)"),
+        (status = 503, description = "Kafka producer not available (kafka_not_configured, kafka_unavailable)"),
     ),
     tag = "ingestions"
 )]
@@ -88,6 +90,14 @@ pub async fn trigger_ingestion(
         .ingest_producer
         .as_ref()
         .ok_or(AppError::KafkaNotConfigured)?;
+
+    // AC5: Probe broker reachability before touching the DB. librdkafka
+    // lazy-connects, so a bad bootstrap server would otherwise block for the
+    // full delivery.timeout.ms (120 s default) before the publish fails.
+    // A 500 ms probe short-circuits that wait so the client gets 503 quickly.
+    if !producer.check_ready(Duration::from_millis(500)).await {
+        return Err(AppError::KafkaUnavailable);
+    }
 
     // 1. Verify the repo exists and belongs to this tenant.
     let exists: Option<(Uuid,)> = sqlx::query_as(
@@ -258,6 +268,13 @@ mod tests {
     #[test]
     fn kafka_not_configured_returns_503() {
         let err = AppError::KafkaNotConfigured;
+        let resp = err.into_response();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn kafka_unavailable_returns_503() {
+        let err = AppError::KafkaUnavailable;
         let resp = err.into_response();
         assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     }

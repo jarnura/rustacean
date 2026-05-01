@@ -1,6 +1,6 @@
 -- Wave 5 (ADR-007 §4): per-stage progress rows, one row per (ingestion_run, stage).
 -- Created atomically with the ingestion_runs row by POST /v1/repos/{id}/ingestions.
--- Written by ingest-status consumer (RUSAA-69); read by GET /v1/ingest/runs/{id}.
+-- Written by ingest-status consumer; read by GET /v1/ingest/runs/{id}.
 
 CREATE TABLE pipeline_stage_runs (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),

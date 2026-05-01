@@ -3,7 +3,7 @@ syntax = "proto3";
 package rust_brain.v1;
 
 // Canonical audit event emitted by every stage worker and service action.
-// Persisted to audit.audit_events by the audit-worker service (RUSAA-71).
+// Persisted to audit.audit_events by the audit-worker service.
 // See ADR-007 §7 for the full envelope specification.
 message AuditEvent {
   // Schema version; currently "rust_brain.v1".

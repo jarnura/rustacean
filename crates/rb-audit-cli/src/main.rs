@@ -1,4 +1,4 @@
-//! `rb-audit-cli` — cross-tenant leak QA command (ADR-007 §7.3 / RUSAA-71).
+//! `rb-audit-cli` — cross-tenant leak QA command (ADR-007 §7.3).
 //!
 //! Usage:
 //!   rb-audit-cli check-leak --tenant <uuid>
@@ -161,7 +161,7 @@ async fn check_pg_tables_empty(
     tenant: Uuid,
 ) -> Result<bool> {
     // Tables that should be empty after tombstone (Wave 5 projections).
-    // These tables are created by the PG projection consumer (RUSAA-66).
+    // These tables are created by the PG projection consumer (Wave 5).
     // If the schema doesn't exist yet (pre-Wave-5), we treat that as PASS.
     let tables = ["code_files", "code_symbols", "code_relations"];
     // Check if schema exists.

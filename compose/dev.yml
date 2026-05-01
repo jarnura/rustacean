@@ -213,7 +213,7 @@ services:
     build:
       context: ..
       dockerfile: docker/control-api/Dockerfile
-    image: rustbrain/control-api:dev
+    image: ghcr.io/jarnura/rustacean/control-api:dev
     environment:
       RB_DATABASE_URL: postgres://rustbrain:rustbrain@postgres:5432/rustbrain
       RB_LISTEN_ADDR: "0.0.0.0:8080"

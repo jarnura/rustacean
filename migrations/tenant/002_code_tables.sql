@@ -1,6 +1,9 @@
 -- Wave 5 (ADR-007 §11.9): per-tenant code projection tables.
 -- Written by projector-pg; read by control-api search endpoints.
 
+-- pgvector is required for the code_embeddings table (vector column type).
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Source files discovered during clone stage.
 -- Idempotency: (repo_id, relative_path) is UNIQUE.
 CREATE TABLE code_files (

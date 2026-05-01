@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result};
 use rb_storage_pg::TenantPool;
 
-use projector_pg::consumer;
+use projector_pg::spawn;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
 
     tracing::info!("projector-pg starting");
 
-    let handle = consumer::spawn(Arc::clone(&pool))?;
+    let handle = spawn(pool)?;
 
     shutdown_signal().await;
     tracing::info!("shutdown signal received — stopping consumer");

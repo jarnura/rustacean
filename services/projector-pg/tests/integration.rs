@@ -127,7 +127,7 @@ async fn write_source_file_inserts_row() {
         body: None,
     };
 
-    projector_pg::projection::write_source_file(&pool, &ctx, &tid, &ev)
+    projector_pg::write_source_file(&pool, &ctx, &tid, &ev)
         .await
         .expect("write_source_file");
 
@@ -163,7 +163,7 @@ async fn write_source_file_upsert_is_idempotent() {
         body: None,
     };
 
-    projector_pg::projection::write_source_file(&pool, &ctx, &tid, &ev)
+    projector_pg::write_source_file(&pool, &ctx, &tid, &ev)
         .await
         .expect("first write");
 
@@ -172,7 +172,7 @@ async fn write_source_file_upsert_is_idempotent() {
         size_bytes: 200,
         ..ev.clone()
     };
-    projector_pg::projection::write_source_file(&pool, &ctx, &tid, &ev_v2)
+    projector_pg::write_source_file(&pool, &ctx, &tid, &ev_v2)
         .await
         .expect("second write (upsert)");
 
@@ -220,7 +220,7 @@ async fn write_source_file_rejects_tenant_mismatch() {
         body: None,
     };
 
-    let result = projector_pg::projection::write_source_file(&pool, &ctx, &envelope_tid, &ev).await;
+    let result = projector_pg::write_source_file(&pool, &ctx, &envelope_tid, &ev).await;
     assert!(result.is_err(), "tenant mismatch must be rejected");
 
     teardown_tenant(&pool, &ctx).await;
@@ -246,7 +246,7 @@ async fn write_source_file_with_blob_ref() {
         body: Some(source_file_event::Body::BlobRef("rb-blob://test".to_string())),
     };
 
-    projector_pg::projection::write_source_file(&pool, &ctx, &tid, &ev)
+    projector_pg::write_source_file(&pool, &ctx, &tid, &ev)
         .await
         .expect("write with blob_ref");
 
@@ -289,7 +289,7 @@ async fn write_parsed_item_inserts_row() {
         body: None,
     };
 
-    projector_pg::projection::write_parsed_item(&pool, &ctx, &tid, &ev)
+    projector_pg::write_parsed_item(&pool, &ctx, &tid, &ev)
         .await
         .expect("write_parsed_item");
 
@@ -327,7 +327,7 @@ async fn write_parsed_item_upsert_is_idempotent() {
         body: None,
     };
 
-    projector_pg::projection::write_parsed_item(&pool, &ctx, &tid, &ev)
+    projector_pg::write_parsed_item(&pool, &ctx, &tid, &ev)
         .await
         .expect("first write");
 
@@ -336,7 +336,7 @@ async fn write_parsed_item_upsert_is_idempotent() {
         line_end: 21,
         ..ev.clone()
     };
-    projector_pg::projection::write_parsed_item(&pool, &ctx, &tid, &ev_v2)
+    projector_pg::write_parsed_item(&pool, &ctx, &tid, &ev_v2)
         .await
         .expect("upsert");
 
@@ -386,7 +386,7 @@ async fn write_parsed_item_with_blob_ref() {
         body: Some(parsed_item_event::Body::BlobRef("rb-blob://ast-json".to_string())),
     };
 
-    projector_pg::projection::write_parsed_item(&pool, &ctx, &tid, &ev)
+    projector_pg::write_parsed_item(&pool, &ctx, &tid, &ev)
         .await
         .expect("write with blob_ref");
 
@@ -426,7 +426,7 @@ async fn write_relation_inserts_row() {
         emitted_at_ms: 0,
     };
 
-    projector_pg::projection::write_relation(&pool, &ctx, &tid, &ev)
+    projector_pg::write_relation(&pool, &ctx, &tid, &ev)
         .await
         .expect("write_relation");
 
@@ -461,10 +461,10 @@ async fn write_relation_dedup_is_idempotent() {
         emitted_at_ms: 0,
     };
 
-    projector_pg::projection::write_relation(&pool, &ctx, &tid, &ev)
+    projector_pg::write_relation(&pool, &ctx, &tid, &ev)
         .await
         .expect("first write");
-    projector_pg::projection::write_relation(&pool, &ctx, &tid, &ev)
+    projector_pg::write_relation(&pool, &ctx, &tid, &ev)
         .await
         .expect("second write (DO NOTHING)");
 
@@ -500,7 +500,7 @@ async fn write_relation_rejects_tenant_mismatch() {
         emitted_at_ms: 0,
     };
 
-    let result = projector_pg::projection::write_relation(&pool, &ctx, &envelope_tid, &ev).await;
+    let result = projector_pg::write_relation(&pool, &ctx, &envelope_tid, &ev).await;
     assert!(result.is_err(), "tenant mismatch must be rejected");
 
     teardown_tenant(&pool, &ctx).await;
@@ -531,7 +531,7 @@ async fn projection_is_tenant_isolated() {
         emitted_at_ms: 0,
         body: None,
     };
-    projector_pg::projection::write_source_file(&pool, &ctx_a, &tid_a, &ev_a)
+    projector_pg::write_source_file(&pool, &ctx_a, &tid_a, &ev_a)
         .await
         .expect("write to A");
 
@@ -545,7 +545,7 @@ async fn projection_is_tenant_isolated() {
         emitted_at_ms: 0,
         body: None,
     };
-    projector_pg::projection::write_source_file(&pool, &ctx_b, &tid_b, &ev_b)
+    projector_pg::write_source_file(&pool, &ctx_b, &tid_b, &ev_b)
         .await
         .expect("write to B");
 

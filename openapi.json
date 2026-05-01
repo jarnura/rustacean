@@ -793,6 +793,65 @@
         }
       }
     },
+    "/v1/repos/{repo_id}/ingestions": {
+      "post": {
+        "tags": [
+          "ingestions"
+        ],
+        "summary": "Trigger a manual ingestion run for a connected repository.",
+        "description": "Creates an `ingestion_runs` row (status `queued`) and one\n`pipeline_stage_runs` row per stage (status `pending`), then publishes an\n`IngestRequest` to `rb.ingest.clone.commands`.\n\nReturns 409 if an ingestion is already queued or running for this repo.\nReturns 503 if the Kafka producer is unavailable.",
+        "operationId": "trigger_ingestion",
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "description": "Repository UUID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerIngestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Ingestion run queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerIngestionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated or session expired"
+          },
+          "403": {
+            "description": "Email not verified"
+          },
+          "404": {
+            "description": "Repository not found or belongs to another tenant"
+          },
+          "409": {
+            "description": "Ingestion already in-flight (ingest_run_already_in_flight)"
+          },
+          "503": {
+            "description": "Kafka producer not available (kafka_not_configured, kafka_unavailable)"
+          }
+        }
+      }
+    },
     "/v1/tenants/{id}/members": {
       "get": {
         "tags": [
@@ -1799,6 +1858,37 @@
           }
         }
       },
+      "TriggerIngestionRequest": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Target branch name. Optional; clone stage falls back to the repo's\n`default_branch` when both `commit_sha` and `branch` are absent."
+          },
+          "commit_sha": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Target commit SHA. Optional; if omitted the clone stage resolves the\nbranch HEAD."
+          }
+        }
+      },
+      "TriggerIngestionResponse": {
+        "type": "object",
+        "required": [
+          "ingest_run_id"
+        ],
+        "properties": {
+          "ingest_run_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "UpdateRoleRequest": {
         "type": "object",
         "required": [
@@ -1903,6 +1993,10 @@
     {
       "name": "repos",
       "description": "Connected repository management"
+    },
+    {
+      "name": "ingestions",
+      "description": "Manual ingestion trigger and run management"
     }
   ]
 }

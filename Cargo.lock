@@ -1049,6 +1049,7 @@ dependencies = [
  "rb-storage-pg",
  "rb-tenant",
  "rb-tracing",
+ "rdkafka",
  "serde",
  "serde_json",
  "sha2 0.10.9",

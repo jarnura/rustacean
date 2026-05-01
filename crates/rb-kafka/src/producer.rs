@@ -49,6 +49,23 @@ impl<E: ProstMessage> Producer<E> {
         })
     }
 
+    /// Probe broker connectivity by fetching cluster metadata with a short timeout.
+    ///
+    /// Returns `true` if at least one broker acknowledges within `timeout`.
+    /// Call this before touching the database so a bad bootstrap-server config
+    /// surfaces as 503 rather than a 500 after a 30-second delivery timeout.
+    pub async fn check_ready(&self, timeout: Duration) -> bool {
+        let inner = self.inner.clone();
+        tokio::task::spawn_blocking(move || {
+            // Bring rdkafka's Producer trait into scope for `client()`.
+            // `as _` avoids naming it (no conflict with our Producer<E> struct).
+            use rdkafka::producer::Producer as _;
+            inner.client().fetch_metadata(None, timeout).is_ok()
+        })
+        .await
+        .unwrap_or(false)
+    }
+
     pub async fn publish(
         &self,
         topic: &str,

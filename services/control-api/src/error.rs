@@ -56,6 +56,8 @@ pub enum AppError {
     IngestRunAlreadyInFlight,
     #[error("Kafka producer is not configured on this instance")]
     KafkaNotConfigured,
+    #[error("Kafka brokers are not reachable")]
+    KafkaUnavailable,
     #[error("failed to publish ingestion event to Kafka: {0}")]
     KafkaPublish(#[from] KafkaError),
     #[error("database error: {0}")]
@@ -130,6 +132,16 @@ impl IntoResponse for AppError {
                 StatusCode::SERVICE_UNAVAILABLE,
                 "kafka_not_configured",
                 self.to_string(),
+            ),
+            AppError::KafkaUnavailable => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "kafka_unavailable",
+                self.to_string(),
+            ),
+            AppError::KafkaPublish(e) if e.is_broker_unavailable() => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "kafka_unavailable",
+                "Kafka broker is not available; try again later".to_owned(),
             ),
             AppError::KafkaPublish(e) => {
                 tracing::error!(error = %e, "kafka publish error");

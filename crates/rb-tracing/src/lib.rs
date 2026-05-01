@@ -3,8 +3,14 @@ mod json_layer;
 pub use json_layer::StructuredJsonLayer;
 
 use opentelemetry::{global, trace::TracerProvider as _};
-use opentelemetry_otlp::{SpanExporter, WithExportConfig as _};
-use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::SdkTracerProvider, Resource};
+use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
+use opentelemetry_otlp::{LogExporter, SpanExporter, WithExportConfig as _};
+use opentelemetry_sdk::{
+    logs::SdkLoggerProvider,
+    propagation::TraceContextPropagator,
+    trace::SdkTracerProvider,
+    Resource,
+};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
 
@@ -16,29 +22,29 @@ pub enum TracingError {
     Subscriber(String),
 }
 
-/// Flushes pending spans on drop. Hold for the process lifetime inside `main()`.
+/// Flushes pending spans and log records on drop. Hold for the process lifetime.
 pub struct TracingGuard {
-    provider: SdkTracerProvider,
+    tracer_provider: SdkTracerProvider,
+    logger_provider: SdkLoggerProvider,
 }
 
 impl Drop for TracingGuard {
     fn drop(&mut self) {
-        if let Err(e) = self.provider.shutdown() {
+        if let Err(e) = self.tracer_provider.shutdown() {
             eprintln!("tracer provider shutdown failed: {e}");
+        }
+        if let Err(e) = self.logger_provider.shutdown() {
+            eprintln!("logger provider shutdown failed: {e}");
         }
     }
 }
 
-/// Initialize OTLP tracing and structured logging.
+/// Initialize OTLP tracing, log export, and structured logging.
 ///
 /// Installs a W3C `TraceContext` propagator, a batched OTLP gRPC span exporter,
+/// a batched OTLP gRPC log exporter (bridged via `opentelemetry-appender-tracing`),
 /// and a `tracing-subscriber` registry with JSON (production) or `pretty`
 /// (dev) formatting. Call once at binary startup before any `tracing` macros.
-///
-/// In JSON mode the subscriber uses [`StructuredJsonLayer`], which writes one
-/// JSON line per event containing `timestamp`, `level`, `target`, `trace_id`,
-/// `span_id`, and `fields`.  `trace_id` / `span_id` are non-empty only when
-/// the event is emitted inside an active OpenTelemetry span.
 ///
 /// Configuration via env vars:
 /// - `OTEL_EXPORTER_OTLP_ENDPOINT` — gRPC endpoint (default: `http://localhost:4317`)
@@ -55,22 +61,37 @@ pub fn init(service_name: &str) -> Result<TracingGuard, TracingError> {
     let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4317".to_string());
 
-    let exporter = SpanExporter::builder()
-        .with_tonic()
-        .with_endpoint(endpoint)
-        .build()
-        .map_err(|e| TracingError::OtlpInit(e.to_string()))?;
-
     let resource = Resource::builder()
         .with_service_name(service_name.to_owned())
         .build();
 
-    let provider = SdkTracerProvider::builder()
-        .with_batch_exporter(exporter)
+    // Trace pipeline
+    let span_exporter = SpanExporter::builder()
+        .with_tonic()
+        .with_endpoint(&endpoint)
+        .build()
+        .map_err(|e| TracingError::OtlpInit(e.to_string()))?;
+
+    let tracer_provider = SdkTracerProvider::builder()
+        .with_batch_exporter(span_exporter)
+        .with_resource(resource.clone())
+        .build();
+
+    global::set_tracer_provider(tracer_provider.clone());
+
+    // Log pipeline — bridges tracing events to OTLP log records routed to Loki
+    let log_exporter = LogExporter::builder()
+        .with_tonic()
+        .with_endpoint(&endpoint)
+        .build()
+        .map_err(|e| TracingError::OtlpInit(e.to_string()))?;
+
+    let logger_provider = SdkLoggerProvider::builder()
+        .with_batch_exporter(log_exporter)
         .with_resource(resource)
         .build();
 
-    global::set_tracer_provider(provider.clone());
+    let log_bridge = OpenTelemetryTracingBridge::new(&logger_provider);
 
     let log_format = std::env::var("RB_LOG_FORMAT").unwrap_or_else(|_| "json".to_string());
 
@@ -78,17 +99,19 @@ pub fn init(service_name: &str) -> Result<TracingGuard, TracingError> {
         tracing_subscriber::registry()
             .with(EnvFilter::from_default_env())
             .with(fmt::layer().pretty())
-            .with(OpenTelemetryLayer::new(provider.tracer("rb-tracing")))
+            .with(OpenTelemetryLayer::new(tracer_provider.tracer("rb-tracing")))
+            .with(log_bridge)
             .try_init()
             .map_err(|e| TracingError::Subscriber(e.to_string()))?;
     } else {
         tracing_subscriber::registry()
             .with(EnvFilter::from_default_env())
             .with(StructuredJsonLayer::stdout())
-            .with(OpenTelemetryLayer::new(provider.tracer("rb-tracing")))
+            .with(OpenTelemetryLayer::new(tracer_provider.tracer("rb-tracing")))
+            .with(log_bridge)
             .try_init()
             .map_err(|e| TracingError::Subscriber(e.to_string()))?;
     }
 
-    Ok(TracingGuard { provider })
+    Ok(TracingGuard { tracer_provider, logger_provider })
 }

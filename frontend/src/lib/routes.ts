@@ -9,6 +9,7 @@ export const routes = {
   repoDetail: "/repos/$repoId",
   members: "/members",
   apiKeys: "/api-keys",
+  ingestion: "/ingestion",
 } as const;
 
 export type RoutePath = (typeof routes)[keyof typeof routes];

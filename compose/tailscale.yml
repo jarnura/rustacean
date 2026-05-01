@@ -32,6 +32,9 @@ services:
   prometheus:
     restart: unless-stopped
 
+  loki:
+    restart: unless-stopped
+
   grafana:
     restart: unless-stopped
 

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
+use axum::routing::get;
 use base64::Engine as _;
 use jsonwebtoken::EncodingKey;
 use rb_auth::{LoginRateLimiter, PasswordHasher};
@@ -24,6 +25,10 @@ use crate::{config::Config, ingest_consumer, routes, state::AppState};
 /// Returns an error if the database connection fails, the TCP listener cannot
 /// bind, or axum returns an IO error during serving.
 pub async fn run(config: Config) -> Result<()> {
+    let metrics_handle = metrics_exporter_prometheus::PrometheusBuilder::new()
+        .install_recorder()
+        .context("failed to install Prometheus metrics recorder")?;
+
     let pool = PgPoolOptions::new()
         .max_connections(20)
         .connect(&config.database_url)
@@ -87,6 +92,7 @@ pub async fn run(config: Config) -> Result<()> {
         .allow_headers(Any);
 
     let app = routes::build(state)
+        .route("/metrics", get(move || async move { metrics_handle.render() }))
         .layer(TraceLayer::new_for_http())
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(cors);

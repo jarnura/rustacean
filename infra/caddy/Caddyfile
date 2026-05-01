@@ -4,5 +4,7 @@
 }
 
 :80 {
+    reverse_proxy /v1/* control-api:8080
+    reverse_proxy /openapi.json control-api:8080
     respond /health 200
 }

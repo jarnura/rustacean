@@ -206,13 +206,12 @@ async fn handle_relation(
     }
 }
 
-async fn emit_ok_status(
-    producer: &Producer<IngestStatusEvent>,
+fn build_ok_status_event(
     tenant_id: &rb_schemas::TenantId,
     ingest_run_id: &str,
     stage: IngestStage,
-) {
-    let status_ev = IngestStatusEvent {
+) -> IngestStatusEvent {
+    IngestStatusEvent {
         ingest_request_id: String::new(),
         tenant_id: tenant_id.to_string(),
         status: IngestStatus::Done as i32,
@@ -221,8 +220,35 @@ async fn emit_ok_status(
         stage: stage as i32,
         stage_seq: 0,
         ingest_run_id: ingest_run_id.to_owned(),
-        attempt: 1,
-    };
+        attempt: 0,
+    }
+}
+
+fn build_failed_status_event(
+    tenant_id: &rb_schemas::TenantId,
+    ingest_run_id: &str,
+    error_message: &str,
+) -> IngestStatusEvent {
+    IngestStatusEvent {
+        ingest_request_id: String::new(),
+        tenant_id: tenant_id.to_string(),
+        status: IngestStatus::Failed as i32,
+        error_message: error_message.to_owned(),
+        occurred_at_ms: chrono::Utc::now().timestamp_millis(),
+        stage: IngestStage::ProjectPg as i32,
+        stage_seq: 0,
+        ingest_run_id: ingest_run_id.to_owned(),
+        attempt: 0,
+    }
+}
+
+async fn emit_ok_status(
+    producer: &Producer<IngestStatusEvent>,
+    tenant_id: &rb_schemas::TenantId,
+    ingest_run_id: &str,
+    stage: IngestStage,
+) {
+    let status_ev = build_ok_status_event(tenant_id, ingest_run_id, stage);
     let env = EventEnvelope::new(*tenant_id, status_ev);
     let key = tenant_id.to_string();
     if let Err(e) = producer.publish(TOPIC_PROJECTOR_EVENTS, key.as_bytes(), env).await {
@@ -236,20 +262,56 @@ async fn emit_failed_status(
     ingest_run_id: &str,
     error_message: &str,
 ) {
-    let status_ev = IngestStatusEvent {
-        ingest_request_id: String::new(),
-        tenant_id: tenant_id.to_string(),
-        status: IngestStatus::Failed as i32,
-        error_message: error_message.to_owned(),
-        occurred_at_ms: chrono::Utc::now().timestamp_millis(),
-        stage: IngestStage::ProjectPg as i32,
-        stage_seq: 0,
-        ingest_run_id: ingest_run_id.to_owned(),
-        attempt: 1,
-    };
+    let status_ev = build_failed_status_event(tenant_id, ingest_run_id, error_message);
     let env = EventEnvelope::new(*tenant_id, status_ev);
     let key = tenant_id.to_string();
     if let Err(e) = producer.publish(TOPIC_PROJECTOR_EVENTS, key.as_bytes(), env).await {
         tracing::error!("projector_pg: failed to publish status event: {e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rb_schemas::TenantId as SchemasTenantId;
+
+    #[test]
+    fn build_ok_status_event_sets_done_status() {
+        let tid = SchemasTenantId::new();
+        let run_id = "run-abc";
+        let ev = build_ok_status_event(&tid, run_id, IngestStage::ProjectPg);
+        assert_eq!(ev.status, IngestStatus::Done as i32);
+        assert_eq!(ev.stage, IngestStage::ProjectPg as i32);
+        assert_eq!(ev.ingest_run_id, run_id);
+        assert_eq!(ev.tenant_id, tid.to_string());
+        assert!(ev.error_message.is_empty());
+        assert_eq!(ev.attempt, 0, "first attempt must be 0 per proto convention");
+    }
+
+    #[test]
+    fn build_ok_status_event_uses_provided_stage() {
+        let tid = SchemasTenantId::new();
+        let ev = build_ok_status_event(&tid, "run-1", IngestStage::Clone);
+        assert_eq!(ev.stage, IngestStage::Clone as i32);
+    }
+
+    #[test]
+    fn build_failed_status_event_sets_failed_status() {
+        let tid = SchemasTenantId::new();
+        let run_id = "run-def";
+        let err = "something went wrong";
+        let ev = build_failed_status_event(&tid, run_id, err);
+        assert_eq!(ev.status, IngestStatus::Failed as i32);
+        assert_eq!(ev.stage, IngestStage::ProjectPg as i32);
+        assert_eq!(ev.ingest_run_id, run_id);
+        assert_eq!(ev.error_message, err);
+        assert_eq!(ev.attempt, 0, "first attempt must be 0 per proto convention");
+    }
+
+    #[test]
+    fn build_failed_status_event_always_uses_project_pg_stage() {
+        let tid = SchemasTenantId::new();
+        let ev = build_failed_status_event(&tid, "run-1", "err");
+        assert_eq!(ev.stage, IngestStage::ProjectPg as i32);
     }
 }

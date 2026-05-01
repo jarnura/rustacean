@@ -46,4 +46,27 @@ impl KafkaError {
                 | KafkaError::InvalidTraceparent(_)
         )
     }
+
+    /// Returns true when the error indicates the Kafka broker cluster is
+    /// unreachable or not yet available (librdkafka lazy-connect scenarios).
+    /// Callers should surface this as HTTP 503, not 500.
+    #[must_use]
+    pub fn is_broker_unavailable(&self) -> bool {
+        use rdkafka::error::RDKafkaErrorCode;
+        let KafkaError::Rdkafka(inner) = self else {
+            return false;
+        };
+        matches!(
+            inner.rdkafka_error_code(),
+            Some(
+                RDKafkaErrorCode::AllBrokersDown
+                    | RDKafkaErrorCode::BrokerNotAvailable
+                    | RDKafkaErrorCode::LeaderNotAvailable
+                    | RDKafkaErrorCode::MessageTimedOut
+                    | RDKafkaErrorCode::NetworkException
+                    | RDKafkaErrorCode::OperationTimedOut
+                    | RDKafkaErrorCode::RequestTimedOut
+            )
+        )
+    }
 }

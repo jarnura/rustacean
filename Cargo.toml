@@ -14,6 +14,9 @@ members = [
     "crates/rb-sse",
     "services/migrate",
     "services/control-api",
+    "services/audit-worker",
+    "crates/rb-audit-cli",
+    "crates/rb-storage-neo4j",
 ]
 
 [workspace.package]
@@ -51,7 +54,7 @@ rdkafka = { version = "0.37", features = ["cmake-build"] }
 thiserror = "2"
 anyhow = "1"
 # IDs
-uuid = { version = "1", features = ["v4", "serde"] }
+uuid = { version = "1", features = ["v4", "v5", "serde"] }
 # CLI
 clap = { version = "4", features = ["derive"] }
 # Configuration / YAML
@@ -87,6 +90,8 @@ hmac = "0.12"
 subtle = "2"
 moka = { version = "0.12", features = ["future"] }
 hex = "0.4"
+# Neo4j driver (used in rb-storage-neo4j; all other crates MUST NOT import neo4rs directly)
+neo4rs = "0.8"
 # Metrics facade (library crates use this; tests use metrics-util for assertions)
 metrics = "0.24"
 metrics-util = { version = "0.18", features = ["debugging"] }

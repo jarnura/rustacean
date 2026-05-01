@@ -3,6 +3,8 @@ use std::sync::Arc;
 use rb_auth::{LoginRateLimiter, PasswordHasher};
 use rb_email::EmailSender;
 use rb_github::GhApp;
+use rb_kafka::Producer;
+use rb_schemas::IngestRequest;
 use rb_sse::EventBus;
 use sqlx::PgPool;
 
@@ -21,4 +23,7 @@ pub struct AppState {
     pub gh: Option<Arc<GhApp>>,
     /// SSE event bus — per-tenant live event fan-out for `GET /v1/ingest/events`.
     pub sse_bus: Arc<EventBus>,
+    /// Kafka producer for `rb.ingest.clone.commands`. `None` when Kafka is not
+    /// reachable; `POST /v1/repos/{id}/ingestions` returns 503 in that case.
+    pub ingest_producer: Option<Arc<Producer<IngestRequest>>>,
 }

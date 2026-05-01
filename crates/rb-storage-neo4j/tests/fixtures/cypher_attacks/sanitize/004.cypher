@@ -1,0 +1,1 @@
+OPTIONAL MATCH (n:Foo) RETURN n

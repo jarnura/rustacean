@@ -106,6 +106,7 @@ fn state_with_gh(secret: &[u8]) -> AppState {
             Secret::new(secret.to_vec()),
         ))),
         sse_bus: Arc::new(EventBus::new(SseConfig::default())),
+        ingest_producer: None,
     }
 }
 
@@ -119,6 +120,7 @@ fn state_without_gh() -> AppState {
         config: Arc::new(config),
         gh: None,
         sse_bus: Arc::new(EventBus::new(SseConfig::default())),
+        ingest_producer: None,
     }
 }
 

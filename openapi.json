@@ -154,6 +154,100 @@
         }
       }
     },
+    "/v1/audit": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "List audit events (admin only).",
+        "description": "Requires an `Admin`-scoped API key **or** an active session with at least\nthe `admin` tenant role.  Returns 403 for any other caller.\n\nSession callers may only query their own tenant's events; the `tenant_id`\nquery parameter, if provided, must match the session tenant.  API key\ncallers may pass any `tenant_id` (or omit it to scope to the key's tenant).",
+        "operationId": "list_audit_events",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "description": "Restrict to this tenant UUID.  For session callers this must match\n(or be absent) — the session tenant is used as the implicit default.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "ISO-8601 / RFC-3339 lower bound on `occurred_at` (inclusive).",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "ISO-8601 / RFC-3339 upper bound on `occurred_at` (inclusive).",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "description": "Exact action string filter, e.g. `ingest.stage.failed`.",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of rows to return (1–500; default 100).",
+            "required": false,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated or session expired"
+          },
+          "403": {
+            "description": "Insufficient role or scope (insufficient_role / insufficient_scope)"
+          }
+        }
+      }
+    },
     "/v1/auth/forgot-password": {
       "post": {
         "tags": [
@@ -999,6 +1093,103 @@
           }
         }
       },
+      "AuditEventItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "event_id",
+          "tenant_id",
+          "actor_kind",
+          "action",
+          "outcome",
+          "occurred_at",
+          "recorded_at"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actor_kind": {
+            "type": "string"
+          },
+          "actor_user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ingestion_run_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "repo_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "stage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stage_seq": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "AuditListResponse": {
+        "type": "object",
+        "required": [
+          "events",
+          "total"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEventItem"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "ConnectRepoRequest": {
         "type": "object",
         "required": [
@@ -1681,6 +1872,10 @@
     }
   },
   "tags": [
+    {
+      "name": "audit",
+      "description": "Immutable audit log (admin only)"
+    },
     {
       "name": "health",
       "description": "Liveness and readiness probes"

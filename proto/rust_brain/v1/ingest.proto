@@ -2,6 +2,21 @@ syntax = "proto3";
 
 package rust_brain.v1;
 
+// ── Pipeline stage enum (ADR-007 §3.1) ───────────────────────────────────────
+// Matches the CHECK constraint in control.pipeline_stage_runs.stage.
+enum IngestStage {
+  INGEST_STAGE_UNSPECIFIED   = 0;
+  INGEST_STAGE_CLONE         = 1;
+  INGEST_STAGE_EXPAND        = 2;
+  INGEST_STAGE_PARSE         = 3;
+  INGEST_STAGE_TYPECHECK     = 4;
+  INGEST_STAGE_EXTRACT       = 5;
+  INGEST_STAGE_EMBED         = 6;
+  INGEST_STAGE_PROJECT_PG    = 7;
+  INGEST_STAGE_PROJECT_NEO4J = 8;
+  INGEST_STAGE_PROJECT_QDRANT = 9;
+}
+
 // Carries raw event data submitted to the ingest pipeline.
 message IngestRequest {
   // UUID of the tenant that owns this ingestion.
@@ -14,6 +29,14 @@ message IngestRequest {
   bytes payload = 4;
   // Unix epoch milliseconds at which the producer created this request.
   int64 created_at_ms = 5;
+  // UUID of the connected repo row in control.repos (ADR-007 §11.1).
+  string repo_id = 6;
+  // UUID of the ingestion_runs row created before this event was published.
+  string ingest_run_id = 7;
+  // Target commit SHA; empty means clone stage resolves HEAD of branch.
+  string commit_sha = 8;
+  // Target branch name; empty means clone stage uses the repo's default branch.
+  string branch = 9;
 }
 
 // Processing lifecycle states for an IngestRequest.
@@ -37,4 +60,12 @@ message IngestStatusEvent {
   string error_message = 4;
   // Unix epoch milliseconds at which this status transition occurred.
   int64 occurred_at_ms = 5;
+  // Pipeline stage this event originated from (ADR-007 §3.1).
+  IngestStage stage = 6;
+  // Monotonically increasing stage sequence number within an ingestion run.
+  int32 stage_seq = 7;
+  // UUID of the pipeline_stage_runs row for this stage attempt.
+  string ingest_run_id = 8;
+  // Retry attempt number (0 = first attempt).
+  int32 attempt = 9;
 }

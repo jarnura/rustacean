@@ -69,6 +69,7 @@ async fn real_db_state() -> Option<(AppState, PgPool)> {
         config: Arc::new(config),
         gh: None,
         sse_bus: Arc::new(EventBus::new(SseConfig::default())),
+        ingest_producer: None,
     };
     Some((state, pool))
 }

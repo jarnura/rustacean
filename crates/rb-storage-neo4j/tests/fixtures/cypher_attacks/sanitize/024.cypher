@@ -1,0 +1,1 @@
+MATCH (all) RETURN all

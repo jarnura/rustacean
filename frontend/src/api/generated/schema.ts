@@ -91,6 +91,31 @@ export interface paths {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/v1/audit": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * List audit events (admin only).
+         * @description Requires an `Admin`-scoped API key **or** an active session with at least
+         *     the `admin` tenant role.  Returns 403 for any other caller.
+         *
+         *     Session callers may only query their own tenant's events; the `tenant_id`
+         *     query parameter, if provided, must match the session tenant.  API key
+         *     callers may pass any `tenant_id` (or omit it to scope to the key's tenant).
+         */
+        readonly get: operations["list_audit_events"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/v1/auth/forgot-password": {
         readonly parameters: {
             readonly query?: never;
@@ -494,6 +519,35 @@ export interface components {
             readonly name: string;
             readonly scopes: readonly components["schemas"]["Scope"][];
         };
+        readonly AuditEventItem: {
+            readonly action: string;
+            readonly actor_kind: string;
+            /** Format: uuid */
+            readonly actor_user_id?: string | null;
+            /** Format: uuid */
+            readonly event_id: string;
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly ingestion_run_id?: string | null;
+            /** Format: date-time */
+            readonly occurred_at: string;
+            readonly outcome: string;
+            /** Format: date-time */
+            readonly recorded_at: string;
+            /** Format: uuid */
+            readonly repo_id?: string | null;
+            readonly stage?: string | null;
+            /** Format: int32 */
+            readonly stage_seq?: number | null;
+            /** Format: uuid */
+            readonly tenant_id: string;
+        };
+        readonly AuditListResponse: {
+            readonly events: readonly components["schemas"]["AuditEventItem"][];
+            /** Format: int64 */
+            readonly total: number;
+        };
         readonly ConnectRepoRequest: {
             /** @description Default branch override. If omitted, the value is fetched from GitHub. */
             readonly default_branch?: string | null;
@@ -872,6 +926,54 @@ export interface operations {
             };
             /** @description Key not found or already revoked */
             readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly list_audit_events: {
+        readonly parameters: {
+            readonly query?: {
+                /**
+                 * @description Restrict to this tenant UUID.  For session callers this must match
+                 *     (or be absent) — the session tenant is used as the implicit default.
+                 */
+                readonly tenant_id?: string | null;
+                /** @description ISO-8601 / RFC-3339 lower bound on `occurred_at` (inclusive). */
+                readonly from?: string | null;
+                /** @description ISO-8601 / RFC-3339 upper bound on `occurred_at` (inclusive). */
+                readonly to?: string | null;
+                /** @description Exact action string filter, e.g. `ingest.stage.failed`. */
+                readonly action?: string | null;
+                /** @description Maximum number of rows to return (1–500; default 100). */
+                readonly limit?: number | null;
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Audit events */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/json": components["schemas"]["AuditListResponse"];
+                };
+            };
+            /** @description Not authenticated or session expired */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Insufficient role or scope (insufficient_role / insufficient_scope) */
+            readonly 403: {
                 headers: {
                     readonly [name: string]: unknown;
                 };

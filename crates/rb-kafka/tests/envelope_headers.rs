@@ -8,6 +8,7 @@ fn make_status_event(tenant_id: TenantId) -> IngestStatusEvent {
         status: IngestStatus::Processing as i32,
         error_message: String::new(),
         occurred_at_ms: 1_700_000_001_000,
+        ..Default::default()
     }
 }
 

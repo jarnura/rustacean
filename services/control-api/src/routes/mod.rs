@@ -1,4 +1,5 @@
 pub mod api_keys;
+pub mod audit;
 pub mod auth;
 pub mod auth_logout;
 pub mod auth_verify;
@@ -13,6 +14,7 @@ use axum::{Router, routing::{delete, get, post, put}};
 
 use crate::routes::{
     api_keys::{create_api_key, list_api_keys, revoke_api_key},
+    audit::list_audit_events,
     auth::{forgot_password, login, reset_password, signup},
     auth_logout::logout,
     auth_verify::verify_email,
@@ -23,6 +25,7 @@ use crate::routes::{
     health::{health_check, openapi_json, ready_check},
     ingest::events_stream::events_stream,
     ingest::test_publish::test_publish,
+    ingest::trigger::trigger_ingestion,
     me::{get_me, switch_tenant},
     repos::{connect_repo, list_repos, trigger_ingest},
     tenants::{invite_member, list_members, remove_member, transfer_ownership, update_member_role},
@@ -56,7 +59,9 @@ pub fn build(state: AppState) -> Router {
         .route("/v1/github/installations/{id}/available-repos", get(list_available_repos))
         .route("/v1/repos", post(connect_repo).get(list_repos))
         .route("/v1/repos/{id}/ingest", post(trigger_ingest))
+        .route("/v1/repos/{repo_id}/ingestions", post(trigger_ingestion))
         .route("/v1/ingest/events", get(events_stream))
         .route("/v1/ingest/test-publish", post(test_publish))
+        .route("/v1/audit", get(list_audit_events))
         .with_state(state)
 }

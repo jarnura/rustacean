@@ -10,8 +10,14 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates/rb-tracing/Cargo.toml      crates/rb-tracing/Cargo.toml
 COPY crates/rb-schemas/Cargo.toml      crates/rb-schemas/Cargo.toml
 COPY crates/rb-secrets/Cargo.toml      crates/rb-secrets/Cargo.toml
+COPY crates/rb-kafka/Cargo.toml        crates/rb-kafka/Cargo.toml
+COPY crates/rb-blob/Cargo.toml         crates/rb-blob/Cargo.toml
+COPY crates/rb-storage-neo4j/Cargo.toml crates/rb-storage-neo4j/Cargo.toml
+COPY crates/rb-storage-pg/Cargo.toml  crates/rb-storage-pg/Cargo.toml
+COPY crates/rb-audit-cli/Cargo.toml   crates/rb-audit-cli/Cargo.toml
 COPY services/migrate/Cargo.toml       services/migrate/Cargo.toml
 COPY services/control-api/Cargo.toml   services/control-api/Cargo.toml
+COPY services/audit-worker/Cargo.toml  services/audit-worker/Cargo.toml
 
 # Stub sources so `cargo build` caches deps without the full source tree.
 RUN find crates services -name "Cargo.toml" | sed 's|Cargo.toml|src/lib.rs|' | \
@@ -23,9 +29,10 @@ RUN find crates services -name "Cargo.toml" | sed 's|Cargo.toml|src/lib.rs|' | \
     rm -rf crates/*/src services/*/src
 
 # Copy real source and build.
-COPY crates/  crates/
+COPY crates/              crates/
 COPY services/control-api/  services/control-api/
 COPY services/migrate/      services/migrate/
+COPY services/audit-worker/ services/audit-worker/
 COPY proto/                 proto/
 
 # Install rdkafka build deps (needed because migrate crate uses rdkafka).

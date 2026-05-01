@@ -5,11 +5,12 @@
 
 use utoipa::OpenApi;
 
-use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me, repos, tenants};
+use crate::routes::{api_keys, audit, auth, auth_logout, auth_verify, github, health, me, repos, tenants};
 
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        audit::list_audit_events,
         health::health_check,
         health::ready_check,
         github::health::github_app_health,
@@ -38,6 +39,8 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
     ),
     components(
         schemas(
+            audit::AuditEventItem,
+            audit::AuditListResponse,
             health::ProbeResponse,
             github::health::GithubAppHealthResponse,
             github::install::InstallUrlResponse,
@@ -84,6 +87,7 @@ use crate::routes::{api_keys, auth, auth_logout, auth_verify, github, health, me
         ),
     ),
     tags(
+        (name = "audit", description = "Immutable audit log (admin only)"),
         (name = "health", description = "Liveness and readiness probes"),
         (name = "auth", description = "Authentication and session management"),
         (name = "me", description = "Current-user and session endpoints"),

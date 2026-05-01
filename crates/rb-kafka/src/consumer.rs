@@ -45,6 +45,10 @@ impl<E: ProstMessage + Default> Consumer<E> {
                 "session.timeout.ms",
                 cfg.session_timeout.as_millis().to_string(),
             )
+            // Dev brokers can take >100ms for first-fetch offset requests;
+            // 30 s matches librdkafka's protocol default and silences REQTMOUT noise.
+            .set("socket.timeout.ms", "30000")
+            .set("request.timeout.ms", "30000")
             .create()?;
 
         // DLQ delivery is best-effort: acks=1 avoids blocking the consume loop on
@@ -83,7 +87,7 @@ impl<E: ProstMessage + Default> Consumer<E> {
                 // rdkafka StreamConsumer exposes fetch_watermarks synchronously.
                 if let Ok((_, high)) =
                     self.inner
-                        .fetch_watermarks(&topic, partition, Duration::from_millis(100))
+                        .fetch_watermarks(&topic, partition, Duration::from_millis(500))
                 {
                     #[allow(clippy::cast_precision_loss)]
                     let lag = (high - offset).max(0) as f64;

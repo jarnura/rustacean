@@ -90,6 +90,7 @@ hex = "0.4"
 # Metrics facade (library crates use this; tests use metrics-util for assertions)
 metrics = "0.24"
 metrics-util = { version = "0.18", features = ["debugging"] }
+metrics-exporter-prometheus = { version = "0.16", default-features = false }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

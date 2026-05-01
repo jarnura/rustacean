@@ -10,9 +10,15 @@
 # host-side Rust toolchain or libcurl4-openssl-dev is required — only
 # docker + docker compose.
 #
-# Prerequisites (compose/full.yml must be running with a built control-api image):
-#   docker compose -f compose/full.yml build control-api
-#   docker compose -f compose/full.yml up -d
+# Prerequisites (compose/full.yml must be running):
+#
+#   Pull the pre-built image (built from main on every merge, no Rust toolchain needed):
+#     docker compose -f compose/full.yml pull control-api
+#     docker compose -f compose/full.yml up -d
+#
+#   Or build locally (e.g. on a feature branch):
+#     docker compose -f compose/full.yml build control-api
+#     docker compose -f compose/full.yml up -d
 #
 # Environment overrides:
 #   TENANT_ID    — UUID identifying the smoke tenant
@@ -69,7 +75,11 @@ echo "       kafka.produce  (rb.tenant_id=${TENANT_ID})"
 echo "       kafka.consume  (rb.tenant_id=${TENANT_ID})"
 echo "       sse.publish    (rb.tenant_id=${TENANT_ID})"
 echo ""
-echo "  4. Confirm no DLQ increment:"
-echo "     rb_kafka_dlq_total must not have increased for topic=${TOPIC}"
+echo "  4. Confirm Kafka metrics are visible and DLQ counter did not increment:"
+echo "     PROM_PORT=\${PROMETHEUS_HOST_PORT:-9090}"
+echo "     curl -s \"http://localhost:\${PROM_PORT}/api/v1/query?query=rb_kafka_messages_total\" | jq ."
+echo "     curl -s \"http://localhost:\${PROM_PORT}/api/v1/query?query=rb_kafka_dlq_total\" | jq ."
+echo "     rb_kafka_dlq_total must return an empty result (no DLQ events);"
+echo "     rb_kafka_messages_total{outcome=\"ok\"} must show at least 1 consume."
 echo ""
 echo "==> ingest-smoke: DONE"

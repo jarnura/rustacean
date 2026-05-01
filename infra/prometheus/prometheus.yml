@@ -14,3 +14,8 @@ scrape_configs:
     honor_labels: true
     static_configs:
       - targets: ['pushgateway:9091']
+
+  - job_name: control-api
+    static_configs:
+      - targets: ['control-api:8080']
+    metrics_path: /metrics

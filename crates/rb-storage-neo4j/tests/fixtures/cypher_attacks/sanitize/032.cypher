@@ -1,0 +1,1 @@
+MATCH (n) WITH n ORDER BY n.created DESC LIMIT 100 RETURN n

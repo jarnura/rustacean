@@ -287,6 +287,25 @@ jobs:
         # Crate does not exist yet; stub ensures job slot exists in CI matrix
         run: echo "rb-feature-resolver-isolation stub — crate not yet created"
 
+  forbid-direct-neo4j-writes:
+    name: forbid-direct-neo4j-writes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject neo4rs imports outside rb-storage-neo4j
+        run: |
+          matches=$(grep -rn --include="*.rs" "neo4rs" . \
+            | grep -v "^\./crates/rb-storage-neo4j/" \
+            | grep -v "^Binary" || true)
+          if [ -n "$matches" ]; then
+            echo "ERROR: Direct neo4rs usage outside crates/rb-storage-neo4j:"
+            echo "$matches"
+            echo ""
+            echo "All Neo4j access MUST go through rb_storage_neo4j::execute() or ::run()."
+            exit 1
+          fi
+          echo "OK: no direct neo4rs imports outside rb-storage-neo4j"
+
   tenant-isolation:
     name: tenant isolation
     runs-on: ubuntu-latest

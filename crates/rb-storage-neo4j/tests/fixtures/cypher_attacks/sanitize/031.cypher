@@ -1,0 +1,1 @@
+MATCH (n:Person) WHERE n.age > 18 RETURN n ORDER BY n.name SKIP 0 LIMIT 10

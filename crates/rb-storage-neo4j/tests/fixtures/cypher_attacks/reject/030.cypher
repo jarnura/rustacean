@@ -1,0 +1,1 @@
+MATCH (n) WHERE n.x = 1 RETURN n; RETURN 1

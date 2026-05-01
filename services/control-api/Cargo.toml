@@ -51,7 +51,6 @@ chrono.workspace = true
 rand.workspace = true
 hex.workspace = true
 urlencoding = "2"
-metrics-exporter-prometheus.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -979,6 +979,7 @@ dependencies = [
  "hmac 0.12.1",
  "http-body-util",
  "jsonwebtoken",
+ "opentelemetry",
  "rand 0.9.4",
  "rb-auth",
  "rb-email",
@@ -3322,6 +3323,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "uuid",
 ]
 

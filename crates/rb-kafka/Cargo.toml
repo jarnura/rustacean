@@ -21,6 +21,7 @@ uuid.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+tracing-opentelemetry.workspace = true
 opentelemetry = { workspace = true, features = ["trace"] }
 tokio.workspace = true
 metrics.workspace = true

@@ -10,15 +10,9 @@
 # host-side Rust toolchain or libcurl4-openssl-dev is required — only
 # docker + docker compose.
 #
-# Prerequisites (compose/full.yml must be running):
-#
-#   Pull the pre-built image (built from main on every merge, no Rust toolchain needed):
-#     docker compose -f compose/full.yml pull control-api
-#     docker compose -f compose/full.yml up -d
-#
-#   Or build locally (e.g. on a feature branch):
-#     docker compose -f compose/full.yml build control-api
-#     docker compose -f compose/full.yml up -d
+# Prerequisites (compose/full.yml must be running with a built control-api image):
+#   docker compose -f compose/full.yml build control-api
+#   docker compose -f compose/full.yml up -d
 #
 # Environment overrides:
 #   TENANT_ID    — UUID identifying the smoke tenant

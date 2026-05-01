@@ -14,6 +14,24 @@ This installs a `pre-push` hook that runs the bundle detector before every push.
 
 Run `make review-ready` from the repo root before opening a PR. It runs `cargo fmt --check`, `cargo clippy`, the full workspace test suite, `cargo deny check`, and an OpenAPI freshness check — and also runs `pnpm lint`, `pnpm typecheck`, and `pnpm test` automatically if your branch touches `frontend/`. All steps execute even if earlier ones fail so you see the complete picture in one pass. Fix everything flagged before pushing; PRs that fail these checks are returned without review.
 
+## Regenerating generated artefacts
+
+The repository tracks two generated files. Regenerate them whenever you change the API surface:
+
+### OpenAPI spec (`openapi.json`)
+
+```bash
+cargo run -p control-api -- print-openapi > openapi.json
+```
+
+### Frontend TypeScript schema (`frontend/src/api/generated/schema.ts`)
+
+```bash
+cd frontend && npm run gen:api
+```
+
+Both commands must be re-run (in that order) whenever control-api handler signatures change. The CI `codegen-drift` job enforces this by running `git diff --exit-code` over both files on every PR.
+
 ## Branch naming
 
 Branch names must match `^(feature|fix|chore|test|docs)/[a-z0-9][a-z0-9-]*$`. `make review-ready` enforces this and prints a rename hint on failure.

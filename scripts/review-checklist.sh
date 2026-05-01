@@ -589,8 +589,11 @@ VALUE_ASSERT_PAT = re.compile(
     r'\.get_gauge\b|debug_recorder|install_recording_recorder|'
     r'assert.*metrics|snapshot\(\)'
 )
+# Path separator for /tests/ directory detection
+TESTS_DIR = os.sep + 'tests' + os.sep
 
-# Collect metric names emitted in non-test source
+# Collect metric names emitted in non-test source.
+# Excludes: test-util modules (by filename) and integration test files (in tests/).
 metric_sources = collections.defaultdict(list)  # name -> [file:lineno, ...]
 for src_dir in SRC_DIRS:
     if not os.path.isdir(src_dir):
@@ -601,18 +604,15 @@ for src_dir in SRC_DIRS:
             if not fname.endswith('.rs'):
                 continue
             path = os.path.join(root, fname)
-            # Skip test files and test-util modules
+            # Skip test helper modules and integration test directories
             if 'testing' in fname or 'test_util' in fname:
+                continue
+            if TESTS_DIR in path:
                 continue
             try:
                 with open(path) as f:
                     text = f.read()
             except Exception:
-                continue
-            # Skip files that are only test modules
-            if re.search(r'#\[cfg\(test\)\]', text) and not re.search(
-                r'pub\s+(async\s+)?fn\s+(?!test_)', text
-            ):
                 continue
             for m in METRIC_MACRO.finditer(text):
                 lineno = text[:m.start()].count('\n') + 1
@@ -625,6 +625,8 @@ if not metric_sources:
 
 # Collect all test files
 test_texts = []
+# Path separator for /tests/ directory detection (cross-platform)
+tests_dir_marker = os.sep + 'tests' + os.sep
 for src_dir in SRC_DIRS:
     if not os.path.isdir(src_dir):
         continue
@@ -634,22 +636,25 @@ for src_dir in SRC_DIRS:
             if not fname.endswith('.rs'):
                 continue
             path = os.path.join(root, fname)
-            if 'test' not in fname and 'testing' not in fname:
-                # Also include files with #[cfg(test)] blocks
-                try:
-                    with open(path) as f:
-                        text = f.read()
-                    if '#[cfg(test)]' in text or '#[test]' in text:
-                        test_texts.append((path, text))
-                except Exception:
-                    pass
-            else:
-                try:
-                    with open(path) as f:
-                        text = f.read()
-                    test_texts.append((path, text))
-                except Exception:
-                    pass
+            # A file is a test file if:
+            #   - its name contains 'test' or 'testing', OR
+            #   - it lives under a tests/ directory (integration tests), OR
+            #   - its content contains #[cfg(test)], #[test], or #[tokio::test]
+            is_test_path = (
+                'test' in fname or
+                'testing' in fname or
+                tests_dir_marker in path
+            )
+            try:
+                with open(path) as f:
+                    text = f.read()
+            except Exception:
+                continue
+            if is_test_path:
+                test_texts.append((path, text))
+            elif ('#[cfg(test)]' in text or '#[test]' in text or
+                  '#[tokio::test]' in text):
+                test_texts.append((path, text))
 
 # Build a set of metric names that have value-asserting tests
 value_tested = set()
@@ -662,7 +667,26 @@ for _, text in test_texts:
         if name in metric_sources:
             value_tested.add(name)
 
-missing = sorted(set(metric_sources.keys()) - value_tested)
+# Load repo-committed metric waivers (for metrics requiring live infra).
+# Format: metric-waiver: <name> — <reason>
+waiver_path = os.path.join(REPO, 'scripts', 'review-checklist-metric-waivers.txt')
+waived_metrics = set()
+if os.path.isfile(waiver_path):
+    with open(waiver_path) as wf:
+        for wline in wf:
+            wm = re.match(r'metric-waiver:\s+(\S+)', wline.strip())
+            if wm:
+                waived_metrics.add(wm.group(1))
+
+all_uncovered = set(metric_sources.keys()) - value_tested
+waived_list = sorted(all_uncovered & waived_metrics)
+missing = sorted(all_uncovered - waived_metrics)
+
+if waived_list:
+    print(f'  SKIP: {len(waived_list)} metric(s) waived (live-infra only; see scripts/review-checklist-metric-waivers.txt):')
+    for name in waived_list:
+        print(f'    {name}')
+
 if missing:
     print(f'  FAIL: {len(missing)} metric(s) have no value-asserting test:')
     for name in missing[:10]:
@@ -675,7 +699,8 @@ if missing:
     print('    (metrics-util) to assert the emitted value, not just run the code path.')
     sys.exit(1)
 
-print(f'  OK: all {len(metric_sources)} metric(s) have value-asserting tests')
+total = len(metric_sources)
+print(f'  OK: {len(value_tested)}/{total} metric(s) tested, {len(waived_list)} waived')
 PYEOF
 }
 

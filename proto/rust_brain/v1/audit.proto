@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package rust_brain.v1;
+
+// Canonical audit event emitted by every stage worker and service action.
+// Persisted to audit.audit_events by the audit-worker service (RUSAA-71).
+// See ADR-007 §7 for the full envelope specification.
+message AuditEvent {
+  // Schema version; currently "rust_brain.v1".
+  string schema_version = 1;
+  // Stable idempotency key — UUID string.
+  string event_id = 2;
+  // UUID of the tenant the action relates to.
+  string tenant_id = 3;
+  // UUID of the ingestion run; empty string when not applicable.
+  string ingestion_run_id = 4;
+  // UUID of the repository; empty string when not applicable.
+  string repo_id = 5;
+  // Pipeline stage: "clone", "expand", "parse", "typecheck",
+  // "extract", "embed", "project_pg", "project_neo4j",
+  // "project_qdrant", or "tombstone".
+  string stage = 6;
+  // Monotonically increasing sequence number within a run + stage.
+  int32 stage_seq = 7;
+  // Actor kind: "system", "service", or "user".
+  string actor_kind = 8;
+  // UUID of the acting user; empty string when actor_kind != "user".
+  string actor_user_id = 9;
+  // Action identifier: "ingest.stage.started", "ingest.stage.completed",
+  // "ingest.stage.failed", "tombstone.requested", "tombstone.completed",
+  // or "audit.read".
+  string action = 10;
+  // Outcome: "success" or "failure".
+  string outcome = 11;
+  // Unix epoch milliseconds when the action occurred.
+  int64 occurred_at_ms = 12;
+  // Structured detail JSON bytes; secrets redacted; max 64 KiB.
+  bytes payload = 13;
+}

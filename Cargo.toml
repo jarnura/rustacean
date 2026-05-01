@@ -14,8 +14,6 @@ members = [
     "crates/rb-sse",
     "services/migrate",
     "services/control-api",
-    "services/audit-worker",
-    "crates/rb-audit-cli",
     "crates/rb-storage-neo4j",
 ]
 
@@ -90,6 +88,8 @@ hmac = "0.12"
 subtle = "2"
 moka = { version = "0.12", features = ["future"] }
 hex = "0.4"
+# Neo4j driver (rb-storage-neo4j)
+neo4rs = "0.8"
 # Metrics facade (library crates use this; tests use metrics-util for assertions)
 metrics = "0.24"
 metrics-util = { version = "0.18", features = ["debugging"] }

@@ -47,6 +47,7 @@ fn is_path_end(upper: &str) -> bool {
 
 /// Scans from `*i` to the matching `]`, advancing `*i` past the `]`.
 /// Handles strings inside relationship patterns so keywords within them are not misread.
+#[allow(clippy::unnecessary_wraps)]
 fn scan_bracket(bytes: &[u8], i: &mut usize) -> Result<String, CypherError> {
     let mut out = String::new();
     let mut depth: usize = 1;
@@ -213,6 +214,7 @@ fn splice_label(inner: &str, label: &str) -> String {
 ///
 /// - [`CypherError::MultiStatement`] — semicolon found outside a string/comment.
 /// - [`CypherError::UnclosedNodePattern`] — `(` in a path clause was never closed.
+#[allow(clippy::too_many_lines)]
 pub fn inject_tenant_label(cypher: &str, label: &str) -> Result<String, CypherError> {
     let bytes = cypher.as_bytes();
     let len = bytes.len();

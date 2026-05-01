@@ -1,11 +1,11 @@
 /// Query routing integration tests for `TenantPool` (REQ-TN-03).
 ///
-/// Proves that TenantCtx::qualify() routes every SQL statement to the correct
+/// Proves that `TenantCtx::qualify()` routes every SQL statement to the correct
 /// tenant schema with zero cross-tenant data leakage.
 ///
 /// Requires a running Postgres instance. Set `TEST_DATABASE_URL` to run:
 ///   docker compose -f compose/test.yml up -d postgres
-///   TEST_DATABASE_URL=postgres://rustbrain:rustbrain@localhost:5433/rustbrain \
+///   `TEST_DATABASE_URL=postgres://rustbrain:rustbrain@localhost:5433/rustbrain` \
 ///     cargo test -p rb-storage-pg --test routing
 use rb_schemas::TenantId;
 use rb_storage_pg::TenantPool;

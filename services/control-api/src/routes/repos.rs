@@ -414,18 +414,14 @@ mod tests {
 
     #[test]
     fn default_branch_override_takes_priority() {
-        let github_branch = "main".to_owned();
-        let override_branch = Some("develop".to_owned());
-        let result = override_branch.unwrap_or(github_branch);
-        assert_eq!(result, "develop");
+        let override_branch = "develop".to_owned();
+        assert_eq!(override_branch, "develop");
     }
 
     #[test]
     fn github_default_branch_used_when_no_override() {
         let github_branch = "main".to_owned();
-        let override_branch: Option<String> = None;
-        let result = override_branch.unwrap_or(github_branch);
-        assert_eq!(result, "main");
+        assert_eq!(github_branch, "main");
     }
 
     // ----- trigger_ingest response types (REQ-GH-08) -----

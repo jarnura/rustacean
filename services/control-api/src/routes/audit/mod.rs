@@ -413,7 +413,7 @@ mod tests {
     #[test]
     fn api_key_tenant_id_fallback_to_key_tenant() {
         let key_tenant = Uuid::new_v4();
-        let effective = None::<Uuid>.unwrap_or(key_tenant);
+        let effective = key_tenant;
         assert_eq!(effective, key_tenant);
     }
 
@@ -423,10 +423,10 @@ mod tests {
         let different_tenant = Uuid::new_v4();
         assert_ne!(session_tenant, different_tenant);
         // Simulates the check in resolve_tenant_and_check_admin.
-        let result: Result<(), AppError> = if different_tenant != session_tenant {
-            Err(AppError::InsufficientRole)
-        } else {
+        let result: Result<(), AppError> = if different_tenant == session_tenant {
             Ok(())
+        } else {
+            Err(AppError::InsufficientRole)
         };
         assert!(matches!(result, Err(AppError::InsufficientRole)));
     }

@@ -2,7 +2,7 @@
 ///
 /// `reject/` — multi-statement attacks that must return `CypherError::MultiStatement`.
 /// `sanitize/` — cross-tenant access patterns that must be sanitized (tenant label injected).
-use rb_storage_neo4j::{inject_tenant_label, CypherError};
+use rb_storage_neo4j::inject_tenant_label;
 
 const LABEL: &str = "Tenant_aabbcc112233445566778899";
 const MIN_PER_DIR: usize = 50;
@@ -22,7 +22,7 @@ fn run_dir(dir: &str, should_reject: bool) {
             continue;
         }
         let content = std::fs::read_to_string(&fpath)
-            .unwrap_or_else(|e| panic!("cannot read {fpath:?}: {e}"));
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", fpath.display()));
         let result = inject_tenant_label(&content, LABEL);
 
         if should_reject {

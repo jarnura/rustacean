@@ -1,4 +1,4 @@
-//! POST /v1/repos/{repo_id}/ingestions — Manual ingestion trigger (REQ-IN-01).
+//! `POST /v1/repos/{repo_id}/ingestions` — Manual ingestion trigger (REQ-IN-01).
 //!
 //! Inserts an `ingestion_runs` row and 9 `pipeline_stage_runs` rows in a single
 //! transaction, then emits an `IngestRequest` to `rb.ingest.clone.commands`.

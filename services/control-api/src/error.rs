@@ -69,6 +69,7 @@ pub enum AppError {
 }
 
 impl IntoResponse for AppError {
+    #[allow(clippy::too_many_lines)]
     fn into_response(self) -> Response {
         let (status, code, message) = match &self {
             AppError::NotFound => (StatusCode::NOT_FOUND, "not_found", self.to_string()),

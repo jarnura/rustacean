@@ -4,11 +4,11 @@
 //!   rb-audit-cli check-leak --tenant <uuid>
 //!
 //! Environment variables:
-//!   RB_DATABASE_URL   PostgreSQL connection string (required)
-//!   NEO4J_HTTP_URL    Neo4j HTTP API URL (optional; default http://localhost:7474)
-//!   QDRANT_URL        Qdrant HTTP URL (optional; default http://localhost:6333)
-//!   NEO4J_USER        Neo4j username (optional; default neo4j)
-//!   NEO4J_PASS        Neo4j password (optional; default neo4j)
+//!   `RB_DATABASE_URL`   `PostgreSQL` connection string (required)
+//!   `NEO4J_HTTP_URL`    Neo4j HTTP API URL (optional; default <http://localhost:7474>)
+//!   `QDRANT_URL`        Qdrant HTTP URL (optional; default <http://localhost:6333>)
+//!   `NEO4J_USER`        Neo4j username (optional; default neo4j)
+//!   `NEO4J_PASS`        Neo4j password (optional; default neo4j)
 //!
 //! Exit codes:
 //!   0 — all leak checks PASS

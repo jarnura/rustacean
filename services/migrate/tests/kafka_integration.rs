@@ -3,11 +3,12 @@
 /// Requires a running Kafka broker. Set `TEST_KAFKA_BROKERS` to run them.
 /// The compose/test.yml stack (port 9093) provides the test broker:
 ///   docker compose -f compose/test.yml up -d kafka
-///   TEST_KAFKA_BROKERS=localhost:9093 cargo test -p migrate kafka
+///   `TEST_KAFKA_BROKERS=localhost:9093` cargo test -p migrate kafka
 ///
-/// Note: apache/kafka:3.9 in test.yml advertises PLAINTEXT://kafka:9092 internally.
+/// Note: apache/kafka:3.9 in test.yml advertises `PLAINTEXT://kafka:9092` internally.
 /// For host-based testing, add `127.0.0.1 kafka` to /etc/hosts or run from inside
 /// the Docker network where `kafka` resolves correctly.
+use std::fmt::Write as _;
 use std::io::Write;
 
 use migrate::{apply_topics, load_topics_file, print_status, KafkaAdmin};
@@ -29,9 +30,7 @@ fn unique_topic(base: &str) -> String {
 fn make_topics_yaml(topics: &[(&str, i32, &str)]) -> NamedTempFile {
     let mut content = "topics:\n".to_owned();
     for (name, partitions, retention) in topics {
-        content.push_str(&format!(
-            "  - name: {name}\n    partitions: {partitions}\n    replication_factor: 1\n    config:\n      retention.ms: \"{retention}\"\n"
-        ));
+        write!(content, "  - name: {name}\n    partitions: {partitions}\n    replication_factor: 1\n    config:\n      retention.ms: \"{retention}\"\n").expect("infallible write to String");
     }
     let mut f = NamedTempFile::new().unwrap();
     f.write_all(content.as_bytes()).unwrap();

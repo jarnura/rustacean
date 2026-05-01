@@ -62,7 +62,7 @@ async fn insert_audit_event(pool: &PgPool, ev: &AuditEvent) -> Result<()> {
     let occurred_at = DateTime::from_timestamp_millis(ev.occurred_at_ms)
         .unwrap_or_else(chrono::Utc::now);
     let payload: serde_json::Value =
-        serde_json::from_slice(&ev.payload).unwrap_or(serde_json::Value::Object(Default::default()));
+        serde_json::from_slice(&ev.payload).unwrap_or(serde_json::Value::Object(serde_json::Map::default()));
 
     // ON CONFLICT DO NOTHING prevents double-write on redelivery (idempotent via unique index).
     sqlx::query(
@@ -141,8 +141,8 @@ mod tests {
     fn payload_invalid_json_falls_back_to_empty_object() {
         let bad: &[u8] = b"not json";
         let val: serde_json::Value =
-            serde_json::from_slice(bad).unwrap_or(serde_json::Value::Object(Default::default()));
-        assert!(val.as_object().map(|o| o.is_empty()).unwrap_or(false));
+            serde_json::from_slice(bad).unwrap_or(serde_json::Value::Object(serde_json::Map::default()));
+        assert!(val.as_object().is_some_and(serde_json::Map::is_empty));
     }
 
     #[test]

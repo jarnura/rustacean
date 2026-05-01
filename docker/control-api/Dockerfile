@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ── Stage 1: build ────────────────────────────────────────────────────────────
-FROM rust:1-bookworm AS builder
+FROM rust:latest AS builder
 
 WORKDIR /app
 
@@ -37,18 +37,7 @@ RUN apt-get update -qq && \
 RUN cargo build --release -p control-api
 
 # ── Stage 2: minimal runtime image ────────────────────────────────────────────
-# debian:bookworm-slim matches the builder's glibc 2.36 and supplies libz + sasl2
-# required by rdkafka at runtime (distroless/cc-debian12 lacks libz.so.1).
-FROM debian:bookworm-slim AS runtime
-
-RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends \
-        ca-certificates libssl3 libsasl2-2 zlib1g libcurl4 && \
-    rm -rf /var/lib/apt/lists/* && \
-    groupadd --gid 65532 nonroot && \
-    useradd --uid 65532 --gid 65532 --no-create-home --system nonroot
-
-USER nonroot
+FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
 
 COPY --from=builder /app/target/release/control-api     /usr/local/bin/control-api
 COPY --from=builder /app/target/release/rb-test-producer /usr/local/bin/rb-test-producer

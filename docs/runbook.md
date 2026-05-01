@@ -296,3 +296,33 @@ Traces are emitted by the control-api via OTLP gRPC to `otel-collector:4317`, wh
 
 - Local: http://localhost:8082
 - Remote: http://100.87.157.74:18082
+
+---
+
+## Live ingest smoke test (ADR-006 §17)
+
+Verifies the full `kafka.produce → kafka.consume → sse.publish` trace chain end-to-end.
+Requires only `docker` + `docker compose` — no host Rust toolchain needed.
+
+```bash
+# 1. Build (or rebuild) the control-api image to include rb-test-producer
+docker compose -f compose/full.yml build control-api
+
+# 2. Start the full stack
+docker compose -f compose/full.yml up -d
+
+# 3. Run the smoke harness
+scripts/ingest-smoke.sh
+
+# Optional: override tenant or topic
+TENANT_ID=<uuid> KAFKA_TOPIC=rb.projector.events scripts/ingest-smoke.sh
+```
+
+After the producer step, verify in Grafana Tempo (`http://localhost:13000` on tailscale, `http://localhost:3000` locally): search by tag `rb.tenant_id=<uuid>` and confirm a single trace containing `kafka.produce`, `kafka.consume`, and `sse.publish` spans.
+
+Port reference for verification steps (tailscale env):
+
+| Step | URL |
+|------|-----|
+| Auth login / SSE stream | http://localhost:10080 (Caddy proxy) |
+| Grafana / Tempo | http://localhost:13000 |

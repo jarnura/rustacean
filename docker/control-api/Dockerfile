@@ -39,7 +39,8 @@ RUN cargo build --release -p control-api
 # ── Stage 2: minimal runtime image ────────────────────────────────────────────
 FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
 
-COPY --from=builder /app/target/release/control-api /usr/local/bin/control-api
+COPY --from=builder /app/target/release/control-api     /usr/local/bin/control-api
+COPY --from=builder /app/target/release/rb-test-producer /usr/local/bin/rb-test-producer
 
 EXPOSE 8080
 

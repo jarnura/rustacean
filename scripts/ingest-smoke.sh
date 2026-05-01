@@ -6,18 +6,18 @@
 # Three correlated spans must appear in Tempo under a single trace id:
 #   kafka.produce  → kafka.consume  → sse.publish   (all rb.tenant_id tagged)
 #
-# Prerequisites (compose/full.yml must be running):
+# The rb-test-producer binary runs inside the control-api container, so no
+# host-side Rust toolchain or libcurl4-openssl-dev is required — only
+# docker + docker compose.
+#
+# Prerequisites (compose/full.yml must be running with a built control-api image):
+#   docker compose -f compose/full.yml build control-api
 #   docker compose -f compose/full.yml up -d
-#   cargo build --workspace
 #
 # Environment overrides:
-#   TENANT_ID                — UUID identifying the smoke tenant
-#                              (default: 00000000-0000-0000-0000-000000000001)
-#   KAFKA_BOOTSTRAP_SERVERS  — Kafka bootstrap address
-#                              (default: localhost:9094 — the external host port)
-#   KAFKA_TOPIC              — topic to publish to (default: rb.projector.events)
-#   OTEL_EXPORTER_OTLP_ENDPOINT — OTLP gRPC endpoint for kafka.produce trace
-#                              (default: http://localhost:4317)
+#   TENANT_ID    — UUID identifying the smoke tenant
+#                  (default: 00000000-0000-0000-0000-000000000001)
+#   KAFKA_TOPIC  — topic to publish to (default: rb.projector.events)
 #
 # Usage:
 #   scripts/ingest-smoke.sh
@@ -25,18 +25,25 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
 TENANT_ID="${TENANT_ID:-00000000-0000-0000-0000-000000000001}"
 TOPIC="${KAFKA_TOPIC:-rb.projector.events}"
-# Default to the external Kafka port used when compose runs on the same host.
-export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9094}"
 
 echo "==> ingest-smoke: producing 1 event"
 echo "    tenant_id : ${TENANT_ID}"
 echo "    topic     : ${TOPIC}"
-echo "    bootstrap : ${KAFKA_BOOTSTRAP_SERVERS}"
+echo "    bootstrap : kafka:9092 (compose-internal)"
 echo ""
 
-cargo run -p control-api --bin rb-test-producer --quiet -- \
+docker compose -f "${REPO_ROOT}/compose/full.yml" run --rm \
+    --entrypoint /usr/local/bin/rb-test-producer \
+    -e TENANT_ID="${TENANT_ID}" \
+    -e KAFKA_BOOTSTRAP_SERVERS="kafka:9092" \
+    -e KAFKA_TOPIC="${TOPIC}" \
+    -e OTEL_EXPORTER_OTLP_ENDPOINT="http://otel-collector:4317" \
+    control-api \
     --tenant-id "${TENANT_ID}" \
     --topic    "${TOPIC}"      \
     --count    1

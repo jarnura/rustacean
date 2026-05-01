@@ -25,8 +25,8 @@ check_range() {
 
     [[ -z "$messages" ]] && return 0
 
-    # Allow waiver: any commit in the range carrying  bundle-waiver: <approver>
-    if printf '%s' "$messages" | grep -qiE "^bundle-waiver[[:space:]]*:"; then
+    # Allow waiver: commit trailer must name an authorized approver (board or cto).
+    if printf '%s' "$messages" | grep -qiE "^bundle-waiver[[:space:]]*:[[:space:]]*(board|cto)[[:space:]]*$"; then
         echo "  bundle-waiver trailer found — bundle check skipped for range ${range}"
         return 0
     fi

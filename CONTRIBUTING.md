@@ -11,7 +11,7 @@ All feature branches must follow this convention:
 Where `<type>` is one of `feature`, `fix`, `chore`, `test`, `docs` and `<slug>` uses only lowercase letters, digits, and hyphens.
 
 Examples:
-- `feature/rusaa-344-pr-hygiene-scripts`
+- `feature/kafka-header-propagation`
 - `fix/kafka-header-propagation`
 - `chore/update-dependencies`
 
@@ -20,13 +20,13 @@ Examples:
 Every PR title must start with a tracker-issue bracket prefix:
 
 ```
-[REQ-XX-NN] <description>    # requirements-registry work
-[RUSAA-NNN] <description>    # tooling / internal work
+[REQ-XX-NN] <description>    # requirements-registry work (e.g. REQ-FE-09)
+[<ISSUE-ID>] <description>   # tooling / internal work (e.g. your Paperclip issue identifier)
 ```
 
-Use `REQ-XX-NN` when implementing a formal requirement from the requirements registry. Use `RUSAA-NNN` for tooling, infrastructure, or internal issues.
+Use `REQ-XX-NN` when implementing a formal requirement from the requirements registry. Use the Paperclip issue identifier (the short `PREFIX-NNN` code shown on every Paperclip ticket) for tooling, infrastructure, or internal issues.
 
-The `pr-hygiene` CI check enforces this on every PR — titles that don't match the pattern block the merge.
+The `pr-hygiene` CI check enforces this on every PR — titles that do not match the pattern block the merge.
 
 ## Pre-push helpers
 
@@ -40,14 +40,14 @@ Validates your current branch name and prints a suggested PR title:
 scripts/review-ready.sh
 ```
 
-Run this before opening a PR. It exits non-zero when the branch name is invalid.
+Run this before opening a PR. It exits non-zero when the branch name is invalid. When the branch slug starts with a recognized tracker token (e.g. `feat-123-my-feature`), the script derives a suggested PR title automatically.
 
 ### `scripts/open-pr.sh`
 
 Wrapper around `gh pr create` that validates the title before creating the PR:
 
 ```bash
-scripts/open-pr.sh --title "[RUSAA-344] feat: pr hygiene scripts" \
+scripts/open-pr.sh --title "[REQ-FE-09] feat: install redirect flow" \
   --body "$(cat pr-body.md)" --base main
 ```
 

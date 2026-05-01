@@ -9,7 +9,8 @@ use rb_schemas::TenantId;
 /// schema-name derivation in `rb-tenant::TenantCtx`.
 #[must_use]
 pub fn tenant_label(tenant_id: &TenantId) -> String {
-    let bytes = tenant_id.as_uuid().as_bytes();
+    let uuid = tenant_id.as_uuid();
+    let bytes = uuid.as_bytes();
     let mut hex = String::with_capacity(24);
     for b in &bytes[4..] {
         use std::fmt::Write as _;

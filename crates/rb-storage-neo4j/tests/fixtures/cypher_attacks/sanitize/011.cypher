@@ -1,0 +1,1 @@
+MATCH (n) WHERE n.name = 'MATCH CREATE MERGE' RETURN n

@@ -1,0 +1,1 @@
+MATCH (n) DELETE n; MATCH (m) RETURN m

@@ -198,6 +198,7 @@ pub struct TestConsumer<E: ProstMessage + Default> {
 #[allow(clippy::unused_async)]
 impl<E: ProstMessage + Default> TestConsumer<E> {
     pub async fn next(&self) -> Option<Result<EventEnvelope<E>, KafkaError>> {
+        // review-checklist-ok: async-guard — tokio::sync::Mutex is designed for cross-await holding
         let mut rx = self.receiver.lock().await;
         match rx.recv().await {
             Ok(msg) => {

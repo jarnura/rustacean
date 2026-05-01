@@ -1,0 +1,11 @@
+# Repo-committed metric waivers for check-7 (metric emission ↔ value semantic).
+#
+# Format: metric-waiver: <metric_name> — <reason>
+#
+# Metrics listed here are exempt from the DebuggingRecorder coverage requirement
+# because they are emitted exclusively in rdkafka-backed production paths that
+# require a live Kafka broker and cannot be exercised via InProcessBus.
+# They are covered by the integration test suite (feature = "integration").
+
+metric-waiver: rb_kafka_consumer_lag_records — emitted in Consumer::next via rdkafka fetch_watermarks; requires live Kafka broker; not reachable via InProcessBus
+metric-waiver: rb_kafka_retry_total — emitted in Producer::publish_retry via rdkafka FutureProducer; requires live Kafka broker; not reachable via InProcessBus

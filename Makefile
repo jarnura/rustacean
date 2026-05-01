@@ -1,9 +1,19 @@
-.PHONY: review-ready install-hooks blob-smoke blob-smoke-s3 ingest-smoke
+.PHONY: review-ready review-checklist review-checklist-fixtures install-hooks blob-smoke blob-smoke-s3 ingest-smoke
 
 # Run all local pre-PR checks: fmt, clippy, test, deny, openapi, frontend (if changed).
 # All steps run even on partial failure so you see the full picture before pushing.
 review-ready:
 	bash scripts/review-ready.sh
+
+# Run semantic reviewer checklist (mechanized catches that static analysis misses).
+# PR Reviewer must paste the full output into their verdict comment.
+# SKIP_DOCKER=1 to skip the image smoke; WAIVER_FILE=<path> to apply waivers.
+review-checklist:
+	bash scripts/review-checklist.sh
+
+# Run fixture tests for the reviewer checklist (PASS and FAIL scenarios per check).
+review-checklist-fixtures:
+	bash tests/review-checklist/run-fixtures.sh
 
 # Install git hooks (pre-push bundle detector). Safe to re-run.
 install-hooks:

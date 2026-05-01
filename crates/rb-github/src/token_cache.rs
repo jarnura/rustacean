@@ -86,6 +86,7 @@ impl TokenCache {
             .entry(installation_id)
             .or_insert_with(|| Arc::new(AsyncMutex::new(())))
             .clone();
+        // review-checklist-ok: async-guard — singleflight pattern; tokio::sync::Mutex is designed for cross-await holding
         let _guard = lock.lock().await;
 
         // Re-check: a concurrent caller may have minted while we were queued.

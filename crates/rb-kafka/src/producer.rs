@@ -2,6 +2,7 @@ use std::{marker::PhantomData, str::FromStr as _, time::Duration};
 
 use metrics::{counter, histogram};
 use tracing::Instrument as _;
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use prost::Message as ProstMessage;
 use rdkafka::{
     ClientConfig,
@@ -241,9 +242,13 @@ fn build_headers<E: ProstMessage>(envelope: &EventEnvelope<E>) -> OwnedHeaders {
         }
         h
     } else {
+        // Explicitly extract the OTel context from the current tracing span rather than
+        // relying on Context::current() — the tracing in_scope() bridge does not
+        // populate the ambient OTel context reliably across all executor configurations.
+        let cx = tracing::Span::current().context();
         let mut injector = KafkaHeaderInjector(h);
         opentelemetry::global::get_text_map_propagator(|prop| {
-            prop.inject(&mut injector);
+            prop.inject_context(&cx, &mut injector);
         });
         injector.0
     }

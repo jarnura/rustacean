@@ -1,7 +1,7 @@
 //! Ollama HTTP client and composite embedding input builder.
 //!
 //! The composite prompt follows ADR-007 §3.5.7:
-//!   fqn / resolved_type_signature / trait_bounds / source text
+//!   fqn / `resolved_type_signature` / `trait_bounds` / source text
 //!
 //! All fields are best-effort: missing fields are omitted rather than erroring
 //! (PARTIAL_* quality items per ADR-007 §13.4).
@@ -44,6 +44,7 @@ pub(crate) fn build_composite(
 /// POST to `{ollama_url}/api/embeddings` and return the embedding vector.
 ///
 /// Ollama response: `{"embedding": [f64, ...]}`
+#[allow(clippy::cast_possible_truncation)]
 pub(crate) async fn call_ollama(
     http: &reqwest::Client,
     ollama_url: &str,

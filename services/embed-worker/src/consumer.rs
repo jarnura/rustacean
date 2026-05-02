@@ -229,7 +229,7 @@ async fn emit_embedding_pending(
         repo_id: ev.repo_id.clone(),
         fqn: ev.fqn.clone(),
         embedding_model: ctx.embedding_model.clone(),
-        dimensions: ctx.embedding_dimensions as i32,
+        dimensions: i32::try_from(ctx.embedding_dimensions).expect("embedding_dimensions fits i32"),
         emitted_at_ms: chrono::Utc::now().timestamp_millis(),
     };
     let envelope = rb_kafka::EventEnvelope::new(tenant_id, pending_ev);

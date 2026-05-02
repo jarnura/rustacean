@@ -45,7 +45,7 @@ pub(crate) async fn ensure_collection(qdrant_url: &str, dimensions: u32) -> Resu
     let body: serde_json::Value = resp.json().await.context("Qdrant info response is not JSON")?;
     let actual_dims = body
         .pointer("/result/config/params/vectors/size")
-        .and_then(|v| v.as_u64())
+        .and_then(serde_json::Value::as_u64)
         .context("could not read vectors.size from Qdrant collection info")?;
 
     if actual_dims != u64::from(dimensions) {

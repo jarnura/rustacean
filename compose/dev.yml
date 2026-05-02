@@ -105,7 +105,9 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.clone.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.expand.commands    --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.parse.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.parsed-items.v1           --partitions 6  --replication-factor 1 --config retention.ms=2592000000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.typecheck.commands --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.typechecked-items.v1      --partitions 6  --replication-factor 1 --config retention.ms=2592000000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.graph.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.embed.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.source-files.v1           --partitions 6  --replication-factor 1 --config retention.ms=2592000000 &&
@@ -325,6 +327,27 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
       OTEL_SERVICE_NAME: parse-worker
       RUST_LOG: "info,parse_worker=debug"
+    volumes:
+      - blob-data:/data/blobs
+    networks:
+      - rb-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  typecheck-worker:
+    build:
+      context: ..
+      dockerfile: docker/typecheck-worker/Dockerfile
+    image: ghcr.io/jarnura/rustacean/typecheck-worker:dev
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      BLOB_STORE_PATH: /data/blobs
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: typecheck-worker
+      RUST_LOG: "info,typecheck_worker=debug"
     volumes:
       - blob-data:/data/blobs
     networks:

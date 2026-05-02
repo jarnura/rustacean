@@ -21,6 +21,7 @@ members = [
     "services/ingest-clone",
     "services/expand-worker",
     "services/parse-worker",
+    "services/typecheck-worker",
     "crates/rb-audit-cli",
     "crates/rb-storage-neo4j",
     "services/projector-pg",

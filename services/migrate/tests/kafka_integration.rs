@@ -40,7 +40,7 @@ fn make_topics_yaml(topics: &[(&str, i32, &str)]) -> NamedTempFile {
 // ── unit tests (no broker required) ─────────────────────────────────────────
 
 #[test]
-fn test_load_all_22_topics_from_infra_yaml() {
+fn test_load_all_23_topics_from_infra_yaml() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -53,8 +53,8 @@ fn test_load_all_22_topics_from_infra_yaml() {
     let tf = load_topics_file(&path).expect("infra/kafka/topics.yaml must be loadable");
     assert_eq!(
         tf.topics.len(),
-        22,
-        "expected 22 topic definitions (9 base + 6 retry + 7 DLQ per ADR-006 §4.3 + rb.parsed-items.v1)"
+        23,
+        "expected 23 topic definitions (8 base + 2 payload + 6 retry + 7 DLQ)"
     );
 
     let names: Vec<&str> = tf.topics.iter().map(|t| t.name.as_str()).collect();
@@ -68,7 +68,9 @@ fn test_load_all_22_topics_from_infra_yaml() {
     assert!(names.contains(&"rb.ingest.embed.commands"));
     assert!(names.contains(&"rb.projector.events"));
     assert!(names.contains(&"rb.audit.events"));
+    // Payload topics
     assert!(names.contains(&"rb.parsed-items.v1"));
+    assert!(names.contains(&"rb.typechecked-items.v1"));
 
     // Retry topics (one per pipeline stage)
     assert!(names.contains(&"rb.ingest.clone.commands.retry"));

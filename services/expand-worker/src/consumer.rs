@@ -21,7 +21,7 @@ use anyhow::{Context as _, Result};
 use bytes::Bytes;
 use metrics::counter;
 use rb_blob::{BlobRef, BlobStore};
-use rb_kafka::{Consumer, EventEnvelope, Producer};
+use rb_kafka::{Consumer, EventEnvelope, Producer, RetryPolicy};
 use rb_schemas::{
     ExpandedFileEvent, IngestRequest, IngestStage, IngestStatus, IngestStatusEvent, TenantId,
     expanded_file_event,
@@ -69,6 +69,7 @@ pub async fn run(
             }
             Some(Ok(envelope)) => {
                 let ingest_run_id = envelope.payload.ingest_run_id.clone();
+                let event_id = envelope.payload.event_id.clone();
                 let tenant_id = envelope.tenant_id;
                 match process_expand(&ctx, &envelope).await {
                     Ok(()) => {
@@ -78,7 +79,9 @@ pub async fn run(
                         }
                     }
                     Err(e) => {
+                        let attempt = envelope._meta.attempt + 1;
                         tracing::error!(
+                            attempt,
                             %ingest_run_id,
                             tenant_id = %tenant_id,
                             "expand_worker: processing failed: {e:#}"
@@ -88,10 +91,28 @@ pub async fn run(
                             &ctx.status_producer,
                             tenant_id,
                             &ingest_run_id,
+                            &event_id,
                             &format!("expand_failed: {e:#}"),
                         )
                         .await;
-                        tokio::time::sleep(Duration::from_secs(1)).await;
+                        let policy = RetryPolicy::default();
+                        if policy.is_terminal(attempt) {
+                            tracing::warn!(
+                                attempt,
+                                %ingest_run_id,
+                                "expand_worker: max retries exceeded — routing to DLQ"
+                            );
+                            counter!("rb_expand_worker_dlq_total").increment(1);
+                            if let Err(dlq_err) = consumer.nack_to_dlq(&envelope, &format!("{e:#}")).await {
+                                tracing::error!(%ingest_run_id, "expand_worker: nack_to_dlq failed: {dlq_err}");
+                            }
+                            if let Err(commit_err) = consumer.commit(&envelope).await {
+                                tracing::warn!(%ingest_run_id, "expand_worker: commit after DLQ failed: {commit_err}");
+                            }
+                        } else {
+                            let delay = policy.next_delay(attempt).unwrap_or(Duration::from_secs(1));
+                            tokio::time::sleep(delay).await;
+                        }
                     }
                 }
             }
@@ -237,6 +258,10 @@ async fn expand_crate(
         format!("{relative_path}/src/lib.rs")
     };
 
+    let source_sha256 = std::fs::read(workspace_root.join(&relative_path))
+        .map(|bytes| hex::encode(Sha256::digest(&bytes)))
+        .unwrap_or_default();
+
     let body = if expanded_bytes.len() <= INLINE_MAX_BYTES {
         expanded_file_event::Body::InlinePayload(expanded_bytes.to_vec())
     } else {
@@ -253,7 +278,7 @@ async fn expand_crate(
         body: Some(body),
         size_bytes,
         emitted_at_ms: chrono::Utc::now().timestamp_millis(),
-        source_sha256: String::new(),
+        source_sha256,
         features: feature_list,
         partial,
     };
@@ -345,10 +370,11 @@ async fn emit_failed_status(
     producer: &Producer<IngestStatusEvent>,
     tenant_id: TenantId,
     ingest_run_id: &str,
+    ingest_request_id: &str,
     error_message: &str,
 ) {
     let ev = IngestStatusEvent {
-        ingest_request_id: String::new(),
+        ingest_request_id: ingest_request_id.to_owned(),
         tenant_id: tenant_id.to_string(),
         status: IngestStatus::Failed as i32,
         error_message: error_message.to_owned(),
@@ -546,6 +572,50 @@ mod tests {
     fn stage_seq_is_2_for_expand() {
         // Expand is the second pipeline stage (Clone=1, Expand=2).
         assert_eq!(IngestStage::Expand as i32, 2);
+    }
+
+    #[test]
+    fn retry_policy_terminal_at_max_attempts() {
+        let policy = RetryPolicy::default();
+        assert!(!policy.is_terminal(0));
+        assert!(!policy.is_terminal(1));
+        assert!(!policy.is_terminal(2));
+        assert!(policy.is_terminal(3), "attempt 3 must be terminal (DLQ path)");
+    }
+
+    #[test]
+    fn retry_policy_provides_backoff_delays() {
+        let policy = RetryPolicy::default();
+        assert!(policy.next_delay(1).is_some());
+        assert!(policy.next_delay(2).is_some());
+        assert!(policy.next_delay(3).is_none(), "no delay after terminal attempt");
+    }
+
+    #[test]
+    fn source_sha256_computed_from_source_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let src_dir = dir.path().join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let content = b"pub fn foo() {}";
+        std::fs::write(src_dir.join("lib.rs"), content).unwrap();
+
+        let relative_path = "src/lib.rs";
+        let computed = std::fs::read(dir.path().join(relative_path))
+            .map(|bytes| hex::encode(sha2::Sha256::digest(&bytes)))
+            .unwrap_or_default();
+
+        let expected = hex::encode(sha2::Sha256::digest(content));
+        assert_eq!(computed, expected);
+        assert!(!computed.is_empty());
+    }
+
+    #[test]
+    fn source_sha256_empty_when_file_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = std::fs::read(dir.path().join("src/lib.rs"))
+            .map(|bytes| hex::encode(sha2::Sha256::digest(&bytes)))
+            .unwrap_or_default();
+        assert!(result.is_empty(), "missing source file should produce empty sha256");
     }
 
     fn create_tar_zst_for_test(src: &Path) -> Vec<u8> {

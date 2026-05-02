@@ -9,11 +9,8 @@ pub use ingest::{
     AuditEvent, EmbeddingPendingEvent, ExpandedFileEvent, GraphRelationEvent, IngestRequest,
     IngestStage, IngestStatus, IngestStatusEvent, ItemKind, ParsedItemEvent, RelationKind,
     SourceFileEvent, Tombstone, TypecheckedItemEvent,
-    parsed_item_event, source_file_event,
+    expanded_file_event, parsed_item_event, source_file_event,
 };
-
-// Re-export prost oneof sub-modules so callers can construct body variants.
-pub use ingest::{expanded_file_event, source_file_event, parsed_item_event};
 
 /// Newtype over [`Uuid`] representing a tenant identifier.
 /// Prost-generated event types are re-exported from this crate (see [`IngestRequest`] etc.).

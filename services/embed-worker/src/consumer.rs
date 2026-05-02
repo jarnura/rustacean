@@ -99,7 +99,7 @@ pub async fn run(
                             &ctx.status_producer,
                             tenant_id,
                             &ingest_run_id,
-                            &envelope.payload.fqn,
+                            &Uuid::new_v4().to_string(),
                             &format!("embed_failed: {e:#}"),
                         )
                         .await;

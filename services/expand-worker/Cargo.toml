@@ -1,0 +1,40 @@
+[package]
+name = "expand-worker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "expand-worker"
+path = "src/main.rs"
+
+[dependencies]
+rb-blob              = { path = "../../crates/rb-blob",             version = "0.1.0" }
+rb-feature-resolver  = { path = "../../crates/rb-feature-resolver", version = "0.1.0" }
+rb-kafka             = { path = "../../crates/rb-kafka",            version = "0.1.0" }
+rb-schemas           = { path = "../../crates/rb-schemas",          version = "0.1.0" }
+rb-tracing           = { path = "../../crates/rb-tracing",          version = "0.1.0" }
+
+anyhow.workspace   = true
+bytes.workspace    = true
+chrono.workspace   = true
+hex.workspace      = true
+metrics.workspace  = true
+serde.workspace    = true
+serde_json.workspace = true
+sha2.workspace     = true
+tokio.workspace    = true
+tracing.workspace  = true
+uuid.workspace     = true
+
+glob     = "0.3"
+tar      = "0.4"
+tempfile = "3"
+toml     = "0.8"
+walkdir  = "2"
+zstd     = "0.13"
+
+[lints]
+workspace = true

@@ -41,6 +41,9 @@ message ExpandedFileEvent {
   string source_sha256   = 10;
   // Resolved Cargo feature set used for this expansion.
   repeated string features = 11;
+  // True when cargo expand exited non-zero but produced partial stdout.
+  // Downstream stages treat this as best-effort; macro-generated items may be absent.
+  bool partial = 12;
 }
 
 message ParsedItemEvent {

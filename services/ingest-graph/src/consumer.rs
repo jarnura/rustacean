@@ -126,7 +126,7 @@ async fn process_item(
 
     tracing::debug!(%ingest_run_id, fqn = %ev.fqn, "ingest_graph: processing item");
 
-    let body = resolve_body(ctx, &ev.body).await?;
+    let body = resolve_body(ctx, ev.body.as_ref()).await?;
 
     let relations = extract_relations(
         &ev.fqn,
@@ -158,7 +158,7 @@ async fn process_item(
 
 async fn resolve_body(
     ctx: &GraphCtx,
-    body: &Option<typechecked_item_event::Body>,
+    body: Option<&typechecked_item_event::Body>,
 ) -> Result<String> {
     match body {
         None => Ok(String::new()),

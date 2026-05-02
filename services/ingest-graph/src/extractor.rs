@@ -1,6 +1,6 @@
 //! Relation extraction from [`TypecheckedItemEvent`] payloads.
 //!
-//! Produces [`Relation`] values (from_fqn, to_fqn, kind) from three sources:
+//! Produces [`Relation`] values (`from_fqn`, `to_fqn`, kind) from three sources:
 //!   1. `resolved_type_signature` — impl blocks and trait supertrait declarations.
 //!   2. `trait_bounds` — bounded-by predicates emitted by typecheck-worker.
 //!   3. Source body (if present) — derive attributes parsed with `syn`.
@@ -84,7 +84,7 @@ fn extract_impl_relation(fqn: &str, sig: &str, out: &mut Vec<Relation>) {
 
 // ── EXTENDS_TRAIT ─────────────────────────────────────────────────────────────
 
-/// `trait Animal: Clone + Send` → (`Animal`, `Clone`, EXTENDS_TRAIT), …
+/// `trait Animal: Clone + Send` → (`Animal`, `Clone`, `EXTENDS_TRAIT`), …
 fn extract_supertrait_relations(fqn: &str, sig: &str, out: &mut Vec<Relation>) {
     if !sig.starts_with("trait ") {
         return;
@@ -109,7 +109,7 @@ fn extract_supertrait_relations(fqn: &str, sig: &str, out: &mut Vec<Relation>) {
 
 // ── BOUNDED_BY ────────────────────────────────────────────────────────────────
 
-/// `trait_bounds: ["T: Clone + Send"]` → (`fqn::T`, `Clone`, BOUNDED_BY), …
+/// `trait_bounds: ["T: Clone + Send"]` → (`fqn::T`, `Clone`, `BOUNDED_BY`), …
 fn extract_bound_relations(fqn: &str, bounds: &[String], out: &mut Vec<Relation>) {
     for bound_str in bounds {
         let Some(colon_pos) = bound_str.find(": ") else {
@@ -203,13 +203,13 @@ fn first_ident_segment(s: &str) -> &str {
     let s = s.trim();
     // Skip leading angle-bracketed part like `<T as Trait>`.
     let s = if s.starts_with('<') {
-        s.find('>').map(|i| s[i + 1..].trim()).unwrap_or(s)
+        s.find('>').map_or(s, |i| s[i + 1..].trim())
     } else {
         s
     };
     // Take everything up to the first `<`, `(`, ` `, or `{`.
     let end = s
-        .find(|c: char| matches!(c, '<' | '(' | ' ' | '{' | '>'))
+        .find(['<', '(', ' ', '{', '>'])
         .unwrap_or(s.len());
     &s[..end]
 }
@@ -241,7 +241,7 @@ fn strip_leading_generics(s: &str) -> &str {
 
 /// Strip generic arguments: `Vec<T>` → `Vec`.
 fn strip_generics(s: &str) -> &str {
-    s.find('<').map(|i| s[..i].trim()).unwrap_or(s)
+    s.find('<').map_or(s, |i| s[..i].trim())
 }
 
 /// Format a syn Path as a simple dot-joined string (last segment for simple paths).

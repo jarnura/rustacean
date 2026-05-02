@@ -1501,6 +1501,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "expand-worker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "chrono",
+ "glob",
+ "hex",
+ "metrics",
+ "rb-blob",
+ "rb-feature-resolver",
+ "rb-kafka",
+ "rb-schemas",
+ "rb-tracing",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tar",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tracing",
+ "uuid",
+ "walkdir",
+ "zstd",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

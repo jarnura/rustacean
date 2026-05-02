@@ -52,6 +52,14 @@ topics:
     config:
       retention.ms: "7776000000"  # 90 days
 
+  # ── Per-stage payload event topics ───────────────────────────────────────
+  # Separate from command topics; projectors subscribe here for data events.
+  - name: rb.parsed-items.v1
+    partitions: 6
+    replication_factor: 1
+    config:
+      retention.ms: "604800000"  # 7 days
+
   # ── Retry topics — one per pipeline stage (6) ────────────────────────────
   # Consumers skip messages whose x-rb-process-after-ms > now(); exponential
   # backoff of 30s/2m/10m encoded in that header by rb-kafka RetryPolicy.

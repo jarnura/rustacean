@@ -16,7 +16,7 @@ use tokio::task::JoinHandle;
 use crate::projection;
 
 const TOPIC_SOURCE_FILE: &str = "rb.source-files.v1";
-const TOPIC_PARSED_ITEMS: &str = "rb.ingest.parse.commands";
+const TOPIC_PARSED_ITEMS: &str = "rb.parsed-items.v1";
 const TOPIC_GRAPH_RELATIONS: &str = "rb.ingest.graph.commands";
 const TOPIC_PROJECTOR_EVENTS: &str = "rb.projector.events";
 

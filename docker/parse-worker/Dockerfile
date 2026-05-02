@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1
+
+# ── Stage 1: build ────────────────────────────────────────────────────────────
+FROM rust:1-bookworm AS builder
+
+WORKDIR /app
+
+# Cache dependency downloads before copying source.
+COPY Cargo.toml Cargo.lock ./
+COPY crates/rb-tracing/Cargo.toml             crates/rb-tracing/Cargo.toml
+COPY crates/rb-schemas/Cargo.toml             crates/rb-schemas/Cargo.toml
+COPY crates/rb-kafka/Cargo.toml               crates/rb-kafka/Cargo.toml
+COPY crates/rb-blob/Cargo.toml                crates/rb-blob/Cargo.toml
+COPY crates/rb-parse-syn/Cargo.toml           crates/rb-parse-syn/Cargo.toml
+COPY crates/rb-parse-tree-sitter/Cargo.toml   crates/rb-parse-tree-sitter/Cargo.toml
+COPY services/parse-worker/Cargo.toml         services/parse-worker/Cargo.toml
+
+# Stub sources so `cargo build` caches deps without the full source tree.
+RUN find crates services -name "Cargo.toml" | sed 's|Cargo.toml|src/lib.rs|' | \
+    xargs -I{} sh -c 'mkdir -p "$(dirname {})" && touch "{}"' && \
+    mkdir -p services/parse-worker/src && \
+    printf 'fn main() {}' > services/parse-worker/src/main.rs && \
+    cargo build --release -p parse-worker 2>/dev/null || true && \
+    rm -rf crates/*/src services/*/src
+
+# Install build dependencies (rdkafka, tree-sitter-rust grammar require cmake + C toolchain).
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        cmake libssl-dev libsasl2-dev zlib1g-dev libcurl4-openssl-dev pkg-config \
+        gcc g++ && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy real source and build.
+COPY crates/                  crates/
+COPY services/parse-worker/   services/parse-worker/
+COPY proto/                   proto/
+
+RUN cargo build --release -p parse-worker
+
+# ── Stage 2: minimal runtime image ────────────────────────────────────────────
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates libssl3 libsasl2-2 zlib1g libcurl4 && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd --gid 65532 nonroot && \
+    useradd --uid 65532 --gid 65532 --no-create-home --system nonroot
+
+USER nonroot
+
+COPY --from=builder /app/target/release/parse-worker /usr/local/bin/parse-worker
+
+ENTRYPOINT ["/usr/local/bin/parse-worker"]

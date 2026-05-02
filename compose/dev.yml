@@ -314,6 +314,27 @@ services:
       otel-collector:
         condition: service_started
 
+  parse-worker:
+    build:
+      context: ..
+      dockerfile: docker/parse-worker/Dockerfile
+    image: ghcr.io/jarnura/rustacean/parse-worker:dev
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      BLOB_STORE_PATH: /data/blobs
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: parse-worker
+      RUST_LOG: "info,parse_worker=debug"
+    volumes:
+      - blob-data:/data/blobs
+    networks:
+      - rb-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
   caddy:
     image: caddy:2-alpine
     volumes:

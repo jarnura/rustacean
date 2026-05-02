@@ -13,6 +13,7 @@ COPY crates/rb-kafka/Cargo.toml        crates/rb-kafka/Cargo.toml
 COPY crates/rb-tenant/Cargo.toml       crates/rb-tenant/Cargo.toml
 COPY crates/rb-storage-pg/Cargo.toml   crates/rb-storage-pg/Cargo.toml
 COPY services/projector-pg/Cargo.toml  services/projector-pg/Cargo.toml
+COPY services/tombstoner/Cargo.toml    services/tombstoner/Cargo.toml
 
 # Stub sources so `cargo build` caches deps without the full source tree.
 RUN find crates services -name "Cargo.toml" | sed 's|Cargo.toml|src/lib.rs|' | \

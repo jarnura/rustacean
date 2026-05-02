@@ -110,7 +110,8 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.embed.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.source-files.v1           --partitions 6  --replication-factor 1 --config retention.ms=2592000000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.projector.events          --partitions 12 --replication-factor 1 --config retention.ms=2592000000 &&
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.audit.events              --partitions 3  --replication-factor 1 --config retention.ms=7776000000
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.audit.events              --partitions 3  --replication-factor 1 --config retention.ms=7776000000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.tombstones.v1             --partitions 3  --replication-factor 1 --config retention.ms=604800000
       "
 
   loki:
@@ -279,6 +280,35 @@ services:
         condition: service_healthy
       rb-migrations:
         condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  tombstoner:
+    build:
+      context: ..
+      dockerfile: docker/tombstoner/Dockerfile
+    image: ghcr.io/jarnura/rustacean/tombstoner:dev
+    environment:
+      DATABASE_URL: postgres://rustbrain:rustbrain@postgres:5432/rustbrain
+      NEO4J_URI: "bolt://neo4j:7687"
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: rustbrain123
+      QDRANT_URL: "http://qdrant:6333"
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: tombstoner
+      RUST_LOG: "info,tombstoner=debug"
+    networks:
+      - rb-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rb-migrations:
+        condition: service_completed_successfully
+      neo4j:
+        condition: service_healthy
       kafka:
         condition: service_healthy
       otel-collector:

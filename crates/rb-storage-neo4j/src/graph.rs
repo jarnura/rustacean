@@ -79,6 +79,40 @@ impl TenantGraph {
         Ok(())
     }
 
+    /// Delete all nodes whose `repo_id` property matches `repo_id` for `tenant_id`.
+    ///
+    /// Uses `DETACH DELETE` so all attached relationships are removed too. Idempotent
+    /// (no-op when no matching nodes exist).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CypherError`] on driver or injection failure.
+    pub async fn delete_repo_nodes(
+        &self,
+        tenant_id: &TenantId,
+        repo_id: &str,
+    ) -> Result<(), CypherError> {
+        self.run(
+            tenant_id,
+            "MATCH (n {repo_id: $repo_id}) DETACH DELETE n",
+            &[("repo_id", repo_id)],
+        )
+        .await
+    }
+
+    /// Delete all nodes for `tenant_id`.
+    ///
+    /// The tenant label is injected automatically by [`Self::run`], so this
+    /// removes every node belonging to this tenant and all their relationships.
+    /// Idempotent (no-op when the tenant has no data).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CypherError`] on driver or injection failure.
+    pub async fn delete_all_tenant_nodes(&self, tenant_id: &TenantId) -> Result<(), CypherError> {
+        self.run(tenant_id, "MATCH (n) DETACH DELETE n", &[]).await
+    }
+
     /// Count `TypeInstance` nodes scoped to `tenant_id`.
     ///
     /// Used by projector-neo4j to enforce the `RB_MONOMORPH_NODE_CAP` per ADR-007 §13.7.

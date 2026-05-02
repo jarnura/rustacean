@@ -76,4 +76,32 @@ impl TenantPool {
         .await?;
         Ok(exists)
     }
+
+    /// Delete all projection rows for `repo_id` from the tenant schema.
+    ///
+    /// Targets `code_files`, `code_symbols`, and `code_relations`. If the
+    /// tenant schema does not exist the call is a no-op (idempotent).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StorageError::Sqlx`] on database failure.
+    pub async fn delete_repo_data(
+        &self,
+        ctx: &TenantCtx,
+        repo_id: uuid::Uuid,
+    ) -> Result<(), StorageError> {
+        if !self.schema_exists(ctx).await? {
+            return Ok(());
+        }
+        let code_files = ctx.qualify("code_files");
+        let code_symbols = ctx.qualify("code_symbols");
+        let code_relations = ctx.qualify("code_relations");
+        for table in [&code_files, &code_symbols, &code_relations] {
+            sqlx::query(&format!("DELETE FROM {table} WHERE repo_id = $1"))
+                .bind(repo_id)
+                .execute(&self.pool)
+                .await?;
+        }
+        Ok(())
+    }
 }

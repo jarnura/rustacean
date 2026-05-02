@@ -12,9 +12,6 @@ pub use ingest::{
     parsed_item_event, source_file_event,
 };
 
-// Re-export prost oneof sub-modules so callers can construct body variants.
-pub use ingest::{source_file_event, parsed_item_event};
-
 /// Newtype over [`Uuid`] representing a tenant identifier.
 /// Prost-generated event types are re-exported from this crate (see [`IngestRequest`] etc.).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

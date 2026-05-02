@@ -1,0 +1,18 @@
+[package]
+name = "rb-feature-resolver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Resolves Cargo feature flags into a canonical feature set for cargo expand"
+keywords = ["cargo", "features", "resolver"]
+categories = ["development-tools"]
+
+[dependencies]
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[lints]
+workspace = true

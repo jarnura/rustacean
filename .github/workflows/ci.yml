@@ -283,9 +283,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check zero rb-* imports in rb-feature-resolver
-        # Crate does not exist yet; stub ensures job slot exists in CI matrix
-        run: echo "rb-feature-resolver-isolation stub — crate not yet created"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check zero rb-* deps in rb-feature-resolver
+        run: bash scripts/check-rb-feature-resolver-isolation.sh
 
   forbid-direct-neo4j-writes:
     name: forbid-direct-neo4j-writes

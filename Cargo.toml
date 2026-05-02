@@ -12,6 +12,7 @@ members = [
     "crates/rb-blob",
     "crates/rb-kafka",
     "crates/rb-sse",
+    "crates/rb-feature-resolver",
     "services/migrate",
     "services/control-api",
     "services/audit-worker",

@@ -1,0 +1,10 @@
+[package]
+name = "fixture-no-defaults"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# No default feature declared; all features must be explicitly requested.
+serde-support = []
+async-support = []
+full = ["serde-support", "async-support"]

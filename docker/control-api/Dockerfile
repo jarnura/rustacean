@@ -19,6 +19,7 @@ COPY crates/rb-audit-cli/Cargo.toml   crates/rb-audit-cli/Cargo.toml
 COPY services/migrate/Cargo.toml       services/migrate/Cargo.toml
 COPY services/control-api/Cargo.toml   services/control-api/Cargo.toml
 COPY services/audit-worker/Cargo.toml  services/audit-worker/Cargo.toml
+COPY services/ingest-clone/Cargo.toml    services/ingest-clone/Cargo.toml
 COPY services/projector-pg/Cargo.toml    services/projector-pg/Cargo.toml
 COPY services/projector-neo4j/Cargo.toml services/projector-neo4j/Cargo.toml
 

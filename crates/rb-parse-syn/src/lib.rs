@@ -33,8 +33,6 @@ pub struct ExtractedItem {
     /// Simple ident name (e.g. `"my_fn"`).
     pub name: String,
     pub kind: Kind,
-    /// Verbatim source text of the item (used as `inline_payload`).
-    pub source_text: String,
     pub line_start: u32,
     pub line_end: u32,
 }
@@ -49,35 +47,29 @@ pub struct ExtractedItem {
 /// Returns [`ParseSynError::Syn`] if `source` cannot be parsed as a Rust file.
 pub fn extract_items(source: &str) -> Result<Vec<ExtractedItem>, ParseSynError> {
     let file: syn::File = syn::parse_str(source)?;
-    let mut visitor = ItemVisitor {
-        source,
-        items: Vec::new(),
-    };
+    let mut visitor = ItemVisitor { items: Vec::new() };
     visitor.visit_file(&file);
     Ok(visitor.items)
 }
 
-struct ItemVisitor<'src> {
-    source: &'src str,
+struct ItemVisitor {
     items: Vec<ExtractedItem>,
 }
 
-impl ItemVisitor<'_> {
+impl ItemVisitor {
     fn push(&mut self, name: String, kind: Kind, span: proc_macro2::Span) {
         let start: LineColumn = span.start();
         let end: LineColumn = span.end();
-        let source_text = self.source.to_owned();
         self.items.push(ExtractedItem {
             name,
             kind,
-            source_text,
             line_start: u32::try_from(start.line).expect("line number fits u32"),
             line_end: u32::try_from(end.line).expect("line number fits u32"),
         });
     }
 }
 
-impl<'ast> Visit<'ast> for ItemVisitor<'_> {
+impl<'ast> Visit<'ast> for ItemVisitor {
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
         self.push(node.sig.ident.to_string(), Kind::Fn, node.sig.ident.span());
     }

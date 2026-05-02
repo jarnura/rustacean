@@ -196,7 +196,7 @@ async fn process_parse(
         error_count += usize::from(extracted.had_error);
 
         for item in extracted.items {
-            emit_parsed_item(ctx, tenant_id, req, rel_path, item).await?;
+            emit_parsed_item(ctx, tenant_id, req, rel_path, item, &source).await?;
         }
 
         if extracted.had_error && extracted_is_empty {
@@ -230,15 +230,50 @@ async fn process_parse(
 
 // ── Kafka producers ──────────────────────────────────────────────────────────
 
+/// Returns the source lines `[line_start, line_end]` (1-based, inclusive) as a
+/// borrowed slice of `file_source`, without trailing newline.
+///
+/// This avoids storing a full-file copy on every item: callers keep one `String`
+/// per file and slice into it at emit time (`O(item_size)` instead of `O(file_size)`).
+fn item_source_slice(file_source: &str, line_start: u32, line_end: u32) -> &str {
+    let start_0 = line_start.saturating_sub(1) as usize;
+    let end_0 = line_end.saturating_sub(1) as usize;
+
+    let mut current_line = 0usize;
+    let mut byte_start: Option<usize> = if start_0 == 0 { Some(0) } else { None };
+
+    for (i, ch) in file_source.char_indices() {
+        if ch == '\n' {
+            current_line += 1;
+            if current_line == start_0 {
+                byte_start = Some(i + 1);
+            }
+            if current_line > end_0 {
+                return match byte_start {
+                    Some(bs) => &file_source[bs..i],
+                    None => file_source,
+                };
+            }
+        }
+    }
+
+    match byte_start {
+        Some(bs) => &file_source[bs..],
+        None => file_source,
+    }
+}
+
 async fn emit_parsed_item(
     ctx: &ParseCtx,
     tenant_id: TenantId,
     req: &IngestRequest,
     source_path: &str,
     item: ExtractedItemData,
+    file_source: &str,
 ) -> Result<()> {
-    let src_bytes = item.source_text.into_bytes();
-    let sha256 = hex::encode(Sha256::digest(&src_bytes));
+    let src_slice = item_source_slice(file_source, item.line_start, item.line_end);
+    let sha256 = hex::encode(Sha256::digest(src_slice.as_bytes()));
+    let src_bytes = src_slice.as_bytes().to_vec();
 
     let body = if src_bytes.len() <= INLINE_MAX_BYTES {
         parsed_item_event::Body::InlinePayload(src_bytes)
@@ -450,5 +485,32 @@ mod tests {
         let policy = RetryPolicy::default();
         assert!(!policy.is_terminal(1));
         assert!(policy.is_terminal(3));
+    }
+
+    #[test]
+    fn item_source_slice_single_line_only_item() {
+        assert_eq!(item_source_slice("fn a() {}", 1, 1), "fn a() {}");
+    }
+
+    #[test]
+    fn item_source_slice_first_of_two() {
+        assert_eq!(item_source_slice("fn a() {}\nfn b() {}", 1, 1), "fn a() {}");
+    }
+
+    #[test]
+    fn item_source_slice_second_of_two() {
+        assert_eq!(item_source_slice("fn a() {}\nfn b() {}", 2, 2), "fn b() {}");
+    }
+
+    #[test]
+    fn item_source_slice_multi_line_item() {
+        let src = "fn a() {}\nfn b() {\n    x\n}\nfn c() {}";
+        assert_eq!(item_source_slice(src, 2, 4), "fn b() {\n    x\n}");
+    }
+
+    #[test]
+    fn item_source_slice_last_line_no_trailing_newline() {
+        let src = "fn a() {}\nfn b() {}";
+        assert_eq!(item_source_slice(src, 2, 2), "fn b() {}");
     }
 }

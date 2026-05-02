@@ -234,7 +234,7 @@ async fn process_parse(
 /// borrowed slice of `file_source`, without trailing newline.
 ///
 /// This avoids storing a full-file copy on every item: callers keep one `String`
-/// per file and slice into it at emit time (O(item_size) instead of O(file_size)).
+/// per file and slice into it at emit time (`O(item_size)` instead of `O(file_size)`).
 fn item_source_slice(file_source: &str, line_start: u32, line_end: u32) -> &str {
     let start_0 = line_start.saturating_sub(1) as usize;
     let end_0 = line_end.saturating_sub(1) as usize;

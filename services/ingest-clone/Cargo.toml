@@ -36,5 +36,8 @@ tar     = "0.4"
 zstd    = "0.13"
 tempfile = "3"
 
+[dev-dependencies]
+metrics-util.workspace = true
+
 [lints]
 workspace = true

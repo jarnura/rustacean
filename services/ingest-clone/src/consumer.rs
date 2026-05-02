@@ -80,6 +80,7 @@ pub async fn run(
             }
             Some(Ok(envelope)) => {
                 let ingest_run_id = envelope.payload.ingest_run_id.clone();
+                let event_id = envelope.payload.event_id.clone();
                 let tenant_id = envelope.tenant_id;
                 match process_clone(&ctx, &envelope).await {
                     Ok(()) => {
@@ -99,6 +100,7 @@ pub async fn run(
                             &ctx.status_producer,
                             tenant_id,
                             &ingest_run_id,
+                            &event_id,
                             &format!("clone_failed: {e:#}"),
                         )
                         .await;
@@ -449,10 +451,11 @@ async fn emit_failed_status(
     producer: &Producer<IngestStatusEvent>,
     tenant_id: TenantId,
     ingest_run_id: &str,
+    event_id: &str,
     error_message: &str,
 ) {
     let ev = IngestStatusEvent {
-        ingest_request_id: String::new(),
+        ingest_request_id: event_id.to_owned(),
         tenant_id: tenant_id.to_string(),
         status: IngestStatus::Failed as i32,
         error_message: error_message.to_owned(),

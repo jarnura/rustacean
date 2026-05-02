@@ -35,7 +35,7 @@ pub const TOPIC_PROJECTOR_EVENTS: &str = "rb.projector.events";
 const CONTENT_TYPE_TAR_ZST: &str = "application/x-tar+zstd";
 const CONTENT_TYPE_RUST: &str = "text/x-rust";
 
-/// Inline threshold: files ≤ 512 KiB are embedded directly; larger ones use blob_ref.
+/// Inline threshold: files ≤ 512 KiB are embedded directly; larger ones use `blob_ref`.
 const INLINE_MAX_BYTES: usize = 512 * 1024;
 
 /// Network inactivity timeout for `git clone`.
@@ -259,7 +259,7 @@ fn collect_rs_files(dir: &Path) -> Result<Vec<RsFile>> {
     let mut files = Vec::new();
     for entry in walkdir::WalkDir::new(dir)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
         .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rs"))
     {
@@ -374,7 +374,7 @@ async fn emit_source_files(
             repo_id: req.repo_id.clone(),
             relative_path: file.relative_path.clone(),
             sha256: file.sha256.clone(),
-            size_bytes: file.size as i64,
+            size_bytes: i64::try_from(file.size).unwrap_or(i64::MAX),
             emitted_at_ms: now_ms,
             body,
         };
@@ -389,7 +389,7 @@ async fn emit_source_files(
     Ok(())
 }
 
-/// Forwards the `IngestRequest` to `rb.ingest.expand.commands` with the blob_ref attached.
+/// Forwards the `IngestRequest` to `rb.ingest.expand.commands` with the `blob_ref` attached.
 async fn emit_expand_command(
     ctx: &CloneCtx,
     tenant_id: TenantId,

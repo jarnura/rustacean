@@ -2216,6 +2216,7 @@ dependencies = [
  "hex",
  "jsonwebtoken",
  "metrics",
+ "metrics-util 0.18.0",
  "rb-blob",
  "rb-github",
  "rb-kafka",

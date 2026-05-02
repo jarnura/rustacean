@@ -48,7 +48,7 @@ impl TenantGraph {
         let injected = inject_tenant_label(cypher, &label)?;
         let mut q = neo4rs::query(&injected);
         for (k, v) in params {
-            q = q.param(*k, *v);
+            q = q.param(k, *v);
         }
         self.inner.run(q).await?;
         Ok(())
@@ -70,10 +70,10 @@ impl TenantGraph {
         let injected = inject_tenant_label(cypher, &label)?;
         let mut q = neo4rs::query(&injected);
         for (k, v) in str_params {
-            q = q.param(*k, *v);
+            q = q.param(k, *v);
         }
         for (k, v) in i64_params {
-            q = q.param(*k, *v);
+            q = q.param(k, *v);
         }
         self.inner.run(q).await?;
         Ok(())

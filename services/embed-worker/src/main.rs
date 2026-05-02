@@ -1,0 +1,91 @@
+use std::sync::Arc;
+
+use anyhow::{Context as _, Result};
+use rb_blob::store_from_env;
+use rb_kafka::{Consumer, ConsumerCfg, Producer, ProducerCfg};
+use rb_schemas::{EmbeddingPendingEvent, IngestStatusEvent, TypecheckedItemEvent};
+
+mod consumer;
+mod embedder;
+mod qdrant;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let _guard = rb_tracing::init("embed-worker")?;
+
+    let ollama_url = std::env::var("RB_OLLAMA_URL")
+        .unwrap_or_else(|_| "http://ollama:11434".to_owned());
+    let embedding_model = std::env::var("RB_EMBEDDING_MODEL")
+        .unwrap_or_else(|_| "nomic-embed-text".to_owned());
+    let embedding_dimensions: u32 = std::env::var("RB_EMBEDDING_DIMENSIONS")
+        .unwrap_or_else(|_| "768".to_owned())
+        .parse()
+        .context("RB_EMBEDDING_DIMENSIONS must be a positive integer")?;
+    let qdrant_url = std::env::var("QDRANT_URL")
+        .unwrap_or_else(|_| "http://qdrant:6333".to_owned());
+
+    // Fail fast: validate that Qdrant collection dimensions match our config.
+    qdrant::ensure_collection(&qdrant_url, embedding_dimensions)
+        .await
+        .context("Qdrant startup check failed")?;
+
+    tracing::info!(
+        embedding_model,
+        embedding_dimensions,
+        "embed-worker: Qdrant collection validated"
+    );
+
+    let blob_store = store_from_env().await.context("failed to init blob store")?;
+
+    let item_consumer: Consumer<TypecheckedItemEvent> =
+        Consumer::new(&ConsumerCfg::new("embed-worker"))?;
+    item_consumer.subscribe(&[consumer::TOPIC_EMBED_COMMANDS])?;
+
+    let status_producer =
+        Arc::new(Producer::<IngestStatusEvent>::new(&ProducerCfg::default())?);
+    let event_producer =
+        Arc::new(Producer::<EmbeddingPendingEvent>::new(&ProducerCfg::default())?);
+
+    tracing::info!("embed-worker starting");
+
+    let handle = tokio::spawn(consumer::run(
+        item_consumer,
+        blob_store,
+        status_producer,
+        event_producer,
+        ollama_url,
+        embedding_model,
+        embedding_dimensions,
+        qdrant_url,
+    ));
+
+    shutdown_signal().await;
+    tracing::info!("shutdown signal received — stopping consumer");
+    handle.abort();
+
+    Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install CTRL+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => {},
+        () = terminate => {},
+    }
+}

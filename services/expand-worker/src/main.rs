@@ -5,7 +5,9 @@ use rb_blob::store_from_env;
 use rb_kafka::{Consumer, ConsumerCfg, Producer, ProducerCfg};
 use rb_schemas::{ExpandedFileEvent, IngestRequest, IngestStatusEvent};
 
+mod archive;
 mod consumer;
+mod workspace;
 
 #[tokio::main]
 async fn main() -> Result<()> {

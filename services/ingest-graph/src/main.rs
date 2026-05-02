@@ -20,6 +20,8 @@ async fn main() -> Result<()> {
 
     let relation_producer =
         Arc::new(Producer::<GraphRelationEvent>::new(&ProducerCfg::default())?);
+    let embed_producer =
+        Arc::new(Producer::<TypecheckedItemEvent>::new(&ProducerCfg::default())?);
     let status_producer =
         Arc::new(Producer::<IngestStatusEvent>::new(&ProducerCfg::default())?);
 
@@ -29,6 +31,7 @@ async fn main() -> Result<()> {
         item_consumer,
         blob_store,
         relation_producer,
+        embed_producer,
         status_producer,
     ));
 

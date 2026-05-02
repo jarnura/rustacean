@@ -358,6 +358,35 @@ services:
       otel-collector:
         condition: service_started
 
+  embed-worker:
+    build:
+      context: ..
+      dockerfile: docker/embed-worker/Dockerfile
+    image: ghcr.io/jarnura/rustacean/embed-worker:dev
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      BLOB_STORE_PATH: /data/blobs
+      RB_OLLAMA_URL: "http://ollama:11434"
+      RB_EMBEDDING_MODEL: "nomic-embed-text"
+      RB_EMBEDDING_DIMENSIONS: "768"
+      QDRANT_URL: "http://qdrant:6333"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: embed-worker
+      RUST_LOG: "info,embed_worker=debug"
+    volumes:
+      - blob-data:/data/blobs
+    networks:
+      - rb-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_started
+      otel-collector:
+        condition: service_started
+
   caddy:
     image: caddy:2-alpine
     volumes:

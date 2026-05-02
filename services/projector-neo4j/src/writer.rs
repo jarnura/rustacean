@@ -22,7 +22,7 @@ pub async fn write_relation(
     tenant_id: &TenantId,
     ev: &GraphRelationEvent,
 ) -> Result<(), CypherError> {
-    let kind = RelationKind::try_from(ev.kind).unwrap_or(RelationKind::RelationKindUnspecified);
+    let kind = RelationKind::try_from(ev.kind).unwrap_or(RelationKind::Unspecified);
 
     match kind {
         RelationKind::MonomorphizedFrom | RelationKind::TypeArgBinds => {
@@ -204,7 +204,7 @@ fn relation_type_str(kind: RelationKind) -> &'static str {
         RelationKind::MacroGeneratedBy => "MACRO_GENERATED_BY",
         RelationKind::DynDispatchCandidate => "DYN_DISPATCH_CANDIDATE",
         RelationKind::ErasedInto => "ERASED_INTO",
-        RelationKind::RelationKindUnspecified => "UNKNOWN",
+        RelationKind::Unspecified => "UNKNOWN",
     }
 }
 

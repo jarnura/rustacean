@@ -74,7 +74,7 @@ async fn handle_envelope(
 
     // Cap enforcement for TypeInstance nodes (ADR-007 §13.7).
     let kind = RelationKind::try_from(ev.kind)
-        .unwrap_or(RelationKind::RelationKindUnspecified);
+        .unwrap_or(RelationKind::Unspecified);
     if matches!(
         kind,
         RelationKind::MonomorphizedFrom | RelationKind::TypeArgBinds
@@ -199,31 +199,38 @@ fn monomorph_cap_from_env() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn monomorph_cap_default() {
-        std::env::remove_var("RB_MONOMORPH_NODE_CAP");
+        let _g = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::remove_var("RB_MONOMORPH_NODE_CAP") };
         assert_eq!(monomorph_cap_from_env(), MONOMORPH_NODE_CAP_DEFAULT);
     }
 
     #[test]
     fn monomorph_cap_from_env_var() {
-        std::env::set_var("RB_MONOMORPH_NODE_CAP", "1000000");
+        let _g = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("RB_MONOMORPH_NODE_CAP", "1000000") };
         assert_eq!(monomorph_cap_from_env(), 1_000_000);
-        std::env::remove_var("RB_MONOMORPH_NODE_CAP");
+        unsafe { std::env::remove_var("RB_MONOMORPH_NODE_CAP") };
     }
 
     #[test]
     fn monomorph_cap_invalid_falls_back_to_default() {
-        std::env::set_var("RB_MONOMORPH_NODE_CAP", "not-a-number");
+        let _g = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("RB_MONOMORPH_NODE_CAP", "not-a-number") };
         assert_eq!(monomorph_cap_from_env(), MONOMORPH_NODE_CAP_DEFAULT);
-        std::env::remove_var("RB_MONOMORPH_NODE_CAP");
+        unsafe { std::env::remove_var("RB_MONOMORPH_NODE_CAP") };
     }
 
     #[test]
     fn monomorph_cap_zero_is_accepted() {
-        std::env::set_var("RB_MONOMORPH_NODE_CAP", "0");
+        let _g = ENV_LOCK.lock().unwrap();
+        unsafe { std::env::set_var("RB_MONOMORPH_NODE_CAP", "0") };
         assert_eq!(monomorph_cap_from_env(), 0);
-        std::env::remove_var("RB_MONOMORPH_NODE_CAP");
+        unsafe { std::env::remove_var("RB_MONOMORPH_NODE_CAP") };
     }
 }

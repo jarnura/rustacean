@@ -15,6 +15,7 @@ COPY crates/rb-storage-pg/Cargo.toml     crates/rb-storage-pg/Cargo.toml
 COPY crates/rb-storage-neo4j/Cargo.toml  crates/rb-storage-neo4j/Cargo.toml
 COPY services/tombstoner/Cargo.toml       services/tombstoner/Cargo.toml
 COPY services/typecheck-worker/Cargo.toml services/typecheck-worker/Cargo.toml
+COPY services/ingest-graph/Cargo.toml    services/ingest-graph/Cargo.toml
 
 # Stub sources so `cargo build` caches deps without the full source tree.
 RUN find crates services -name "Cargo.toml" | sed 's|Cargo.toml|src/lib.rs|' | \

@@ -108,6 +108,7 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.typecheck.commands --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.graph.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.ingest.embed.commands     --partitions 6  --replication-factor 1 --config retention.ms=604800000 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.source-files.v1           --partitions 6  --replication-factor 1 --config retention.ms=2592000000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.projector.events          --partitions 12 --replication-factor 1 --config retention.ms=2592000000 &&
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic rb.audit.events              --partitions 3  --replication-factor 1 --config retention.ms=7776000000
       "
@@ -259,6 +260,29 @@ services:
         condition: service_started
     healthcheck:
       disable: true
+
+  projector-pg:
+    build:
+      context: ..
+      dockerfile: docker/projector-pg/Dockerfile
+    image: ghcr.io/jarnura/rustacean/projector-pg:dev
+    environment:
+      DATABASE_URL: postgres://rustbrain:rustbrain@postgres:5432/rustbrain
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: projector-pg
+      RUST_LOG: "info,projector_pg=debug"
+    networks:
+      - rb-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rb-migrations:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
 
   caddy:
     image: caddy:2-alpine

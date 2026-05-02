@@ -17,6 +17,7 @@ members = [
     "services/audit-worker",
     "crates/rb-audit-cli",
     "crates/rb-storage-neo4j",
+    "services/projector-pg",
 ]
 
 [workspace.package]

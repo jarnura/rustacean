@@ -11,7 +11,6 @@ pub(crate) struct Extraction {
 pub(crate) struct ExtractedItemData {
     pub(crate) name: String,
     pub(crate) kind: ItemKind,
-    pub(crate) source_text: String,
     pub(crate) line_start: u32,
     pub(crate) line_end: u32,
 }
@@ -25,7 +24,6 @@ pub(crate) fn parse_file(source: &str, rel_path: &str, ingest_run_id: &str) -> E
                 .map(|i| ExtractedItemData {
                     name: i.name,
                     kind: syn_kind_to_proto(i.kind),
-                    source_text: i.source_text,
                     line_start: i.line_start,
                     line_end: i.line_end,
                 })
@@ -62,7 +60,6 @@ pub(crate) fn parse_file(source: &str, rel_path: &str, ingest_run_id: &str) -> E
         .map(|i| ExtractedItemData {
             name: i.name,
             kind: ts_kind_to_proto(i.kind),
-            source_text: source.to_owned(),
             line_start: i.line_start,
             line_end: i.line_end,
         })

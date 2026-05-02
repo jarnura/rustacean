@@ -3,8 +3,9 @@
 //! All Cypher passes through `rb_storage_neo4j::TenantGraph`, which injects the
 //! tenant label before execution (ADR-007 §3.4 / REQ-IN-14).
 
-use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+
+use siphasher::sip::SipHasher13;
 
 use rb_schemas::{GraphRelationEvent, RelationKind, TenantId};
 use rb_storage_neo4j::{CypherError, TenantGraph};
@@ -212,8 +213,11 @@ fn relation_type_str(kind: RelationKind) -> &'static str {
 ///
 /// The full FQN encodes the concrete type arguments (e.g. `Vec<i32>::push`), so
 /// hashing it gives a unique-per-instantiation key (ADR-007 §11.10).
+///
+/// Uses `SipHasher13` with fixed keys so the output is stable across Rust toolchain
+/// versions (unlike `DefaultHasher` whose impl is explicitly unspecified).
 fn hash_fqn(fqn: &str) -> String {
-    let mut h = DefaultHasher::new();
+    let mut h = SipHasher13::new_with_keys(0, 0);
     fqn.hash(&mut h);
     format!("{:016x}", h.finish())
 }
@@ -221,6 +225,14 @@ fn hash_fqn(fqn: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hash_fqn_pinned_value() {
+        // Pin the exact byte output of SipHasher13(k0=0, k1=0) for "std::vec::Vec<i32>".
+        // If this test ever fails after a toolchain upgrade the implementation regressed to
+        // a non-stable hasher — fix the hasher, not this constant.
+        assert_eq!(hash_fqn("std::vec::Vec<i32>"), "4e91803ce2caff87");
+    }
 
     #[test]
     fn hash_fqn_is_deterministic() {

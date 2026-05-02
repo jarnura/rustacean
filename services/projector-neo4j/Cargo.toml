@@ -18,8 +18,12 @@ rb-tracing        = { path = "../../crates/rb-tracing",       version = "0.1.0" 
 anyhow.workspace  = true
 chrono.workspace  = true
 metrics.workspace = true
+siphasher         = "1"
 tokio.workspace   = true
 tracing.workspace = true
+
+[dev-dependencies]
+metrics-util.workspace = true
 
 [lints]
 workspace = true

@@ -3218,10 +3218,12 @@ dependencies = [
  "anyhow",
  "chrono",
  "metrics",
+ "metrics-util 0.18.0",
  "rb-kafka",
  "rb-schemas",
  "rb-storage-neo4j",
  "rb-tracing",
+ "siphasher",
  "tokio",
  "tracing",
 ]

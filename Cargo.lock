@@ -2276,6 +2276,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ingest-graph"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "metrics",
+ "metrics-util 0.18.0",
+ "proc-macro2",
+ "rb-blob",
+ "rb-kafka",
+ "rb-schemas",
+ "rb-tracing",
+ "syn 2.0.117",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"

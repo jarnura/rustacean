@@ -24,6 +24,9 @@ COPY services/projector-pg/Cargo.toml    services/projector-pg/Cargo.toml
 COPY services/projector-neo4j/Cargo.toml services/projector-neo4j/Cargo.toml
 COPY services/tombstoner/Cargo.toml      services/tombstoner/Cargo.toml
 COPY services/expand-worker/Cargo.toml   services/expand-worker/Cargo.toml
+COPY crates/rb-parse-syn/Cargo.toml           crates/rb-parse-syn/Cargo.toml
+COPY crates/rb-parse-tree-sitter/Cargo.toml   crates/rb-parse-tree-sitter/Cargo.toml
+COPY services/parse-worker/Cargo.toml         services/parse-worker/Cargo.toml
 
 # Stub sources so `cargo build` caches deps without the full source tree.
 RUN find crates services -name "Cargo.toml" | sed 's|Cargo.toml|src/lib.rs|' | \
@@ -39,6 +42,7 @@ COPY crates/              crates/
 COPY services/control-api/  services/control-api/
 COPY services/migrate/      services/migrate/
 COPY services/audit-worker/ services/audit-worker/
+COPY services/parse-worker/ services/parse-worker/
 COPY proto/                 proto/
 
 # Install rdkafka build deps (needed because migrate crate uses rdkafka).

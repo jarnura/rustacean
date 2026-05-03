@@ -233,7 +233,7 @@ async fn git_clone(url: &str, target: &Path) -> Result<()> {
             .env("GIT_HTTP_LOW_SPEED_TIME", CLONE_TIMEOUT_SECS.to_string())
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
             .status(),
     )
     .await

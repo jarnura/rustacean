@@ -10,13 +10,24 @@ enum ScanState {
     BlockComment,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum PathClauseKind {
+    Match,
+    CreateOrMerge,
+}
+
 fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
 /// Keywords that put us into a path-pattern context (node patterns expected).
-fn is_path_start(upper: &str) -> bool {
-    matches!(upper, "MATCH" | "CREATE" | "MERGE")
+/// Returns the kind of clause so the injector can track bound variables.
+fn path_start_kind(upper: &str) -> Option<PathClauseKind> {
+    match upper {
+        "MATCH" => Some(PathClauseKind::Match),
+        "CREATE" | "MERGE" => Some(PathClauseKind::CreateOrMerge),
+        _ => None,
+    }
 }
 
 /// Keywords that end the current path-pattern context.
@@ -207,6 +218,10 @@ fn splice_label(inner: &str, label: &str) -> String {
 /// Rewrites `cypher` so that every node pattern in a MATCH / MERGE / CREATE / OPTIONAL MATCH
 /// clause has `:<label>` injected after the optional variable and before any existing labels.
 ///
+/// Variables bound by MATCH clauses are tracked. A bare variable reference in MERGE/CREATE
+/// (no labels, no properties) that names an already-bound variable is left as-is so that
+/// Neo4j 5.x `MERGE (a)-[:R]->(b)` patterns work when `a` and `b` were bound by a prior MATCH.
+///
 /// Also rejects queries that contain a bare semicolon outside a string or comment, as those
 /// indicate multi-statement injection attempts.
 ///
@@ -226,8 +241,13 @@ pub fn inject_tenant_label(cypher: &str, label: &str) -> Result<String, CypherEr
     // A `(` that follows an identifier is a function call, not a node pattern.
     let mut last_was_ident = false;
 
-    // Whether the scanner is inside a MATCH/CREATE/MERGE path clause.
+    // Whether the scanner is inside a MATCH/CREATE/MERGE path clause, and which kind.
     let mut in_path_clause = false;
+    let mut path_clause_kind: Option<PathClauseKind> = None;
+
+    // Variables declared by MATCH clauses — skip label injection for bare references to these
+    // in MERGE/CREATE so Neo4j 5.x doesn't reject re-labelling already-bound variables.
+    let mut bound_vars: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     while i < len {
         let b = bytes[i];
@@ -355,13 +375,15 @@ pub fn inject_tenant_label(cypher: &str, label: &str) -> Result<String, CypherEr
                     let word = &cypher[word_start..i];
                     let upper = word.to_ascii_uppercase();
 
-                    if is_path_start(&upper) {
+                    if let Some(kind) = path_start_kind(&upper) {
                         in_path_clause = true;
+                        path_clause_kind = Some(kind);
                         // Allow `MATCH(n)` (no space) — keyword itself is not an identifier
                         // for the purpose of distinguishing function calls.
                         last_was_ident = false;
                     } else if is_path_end(&upper) {
                         in_path_clause = false;
+                        path_clause_kind = None;
                         last_was_ident = true;
                     } else {
                         last_was_ident = true;
@@ -374,10 +396,39 @@ pub fn inject_tenant_label(cypher: &str, label: &str) -> Result<String, CypherEr
                 if b == b'(' && in_path_clause && !last_was_ident {
                     i += 1;
                     let inner = collect_node_pattern(bytes, &mut i)?;
-                    let patched = splice_label(&inner, label);
-                    out.push('(');
-                    out.push_str(&patched);
-                    out.push(')');
+
+                    // Extract the variable name (if any) from the node pattern.
+                    let trimmed = inner.trim_start();
+                    let var_end = trimmed
+                        .find(|c: char| !c.is_alphanumeric() && c != '_')
+                        .unwrap_or(trimmed.len());
+                    let var_name = &trimmed[..var_end];
+                    let rest_after_var = trimmed[var_end..].trim_start();
+
+                    // In MERGE/CREATE, a bare variable reference (no labels, no properties)
+                    // that names an already-bound variable must NOT receive a label injection.
+                    // Neo4j 5.x rejects MERGE/CREATE on already-declared variables with labels.
+                    let is_bound_ref = path_clause_kind == Some(PathClauseKind::CreateOrMerge)
+                        && !var_name.is_empty()
+                        && rest_after_var.is_empty()
+                        && bound_vars.contains(var_name);
+
+                    if is_bound_ref {
+                        // Emit the pattern unchanged.
+                        out.push('(');
+                        out.push_str(&inner);
+                        out.push(')');
+                    } else {
+                        // Track variables declared by MATCH for future MERGE/CREATE checks.
+                        if path_clause_kind == Some(PathClauseKind::Match) && !var_name.is_empty()
+                        {
+                            bound_vars.insert(var_name.to_owned());
+                        }
+                        let patched = splice_label(&inner, label);
+                        out.push('(');
+                        out.push_str(&patched);
+                        out.push(')');
+                    }
                     last_was_ident = false;
                     continue;
                 }

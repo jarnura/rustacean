@@ -326,7 +326,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
       RB_BLOB_BASE_PATH: /data/blobs
       GITHUB_APP_ID: "${RB_GH_APP_ID:-}"
-      GITHUB_APP_PRIVATE_KEY_PEM: "${RB_GH_APP_PRIVATE_KEY:-}"
+      GITHUB_APP_PRIVATE_KEY_PEM: "${GITHUB_APP_PRIVATE_KEY_PEM:-}"
       GITHUB_WEBHOOK_SECRET: "${RB_GH_APP_WEBHOOK_SECRET:-dev-secret-do-not-use-in-prod}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
       OTEL_SERVICE_NAME: ingest-clone
@@ -398,6 +398,27 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
       OTEL_SERVICE_NAME: typecheck-worker
       RUST_LOG: "info,typecheck_worker=debug"
+    volumes:
+      - blob-data:/data/blobs
+    networks:
+      - rb-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  ingest-graph:
+    build:
+      context: ..
+      dockerfile: docker/ingest-graph/Dockerfile
+    image: ghcr.io/jarnura/rustacean/ingest-graph:dev
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+      RB_BLOB_BASE_PATH: /data/blobs
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OTEL_SERVICE_NAME: ingest-graph
+      RUST_LOG: "info,ingest_graph=debug"
     volumes:
       - blob-data:/data/blobs
     networks:

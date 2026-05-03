@@ -53,7 +53,7 @@ FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
-        ca-certificates libssl3 libsasl2-2 zlib1g libcurl4 && \
+        ca-certificates libssl3 libsasl2-2 zlib1g libcurl4 git && \
     rm -rf /var/lib/apt/lists/* && \
     groupadd --gid 65532 nonroot && \
     useradd --uid 65532 --gid 65532 --no-create-home --system nonroot

@@ -127,7 +127,7 @@ pub(crate) async fn maybe_complete_run(pool: &PgPool, ingest_run_id: &str) -> Re
         sqlx::query(
             "UPDATE control.ingestion_runs \
              SET status = 'succeeded', finished_at = now() \
-             WHERE id = $1 AND status = 'running'",
+             WHERE id = $1 AND status IN ('queued', 'running')",
         )
         .bind(run_id)
         .execute(pool)

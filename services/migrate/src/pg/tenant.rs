@@ -28,6 +28,8 @@ pub fn migrate_tenant(
 ///
 /// The `pool` reference is consumed only to clone the pool — the returned
 /// future is `'static` and captures no caller lifetimes.
+// Used by `control-api` as a library consumer; not called from this binary.
+#[allow(dead_code)]
 pub fn migrate_tenant_schema(
     pool: &PgPool,
     schema: &str,

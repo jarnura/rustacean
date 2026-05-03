@@ -2,7 +2,7 @@ name: rustbrain-dev
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: rustbrain
       POSTGRES_PASSWORD: rustbrain
@@ -218,13 +218,14 @@ services:
       - rb-net
 
   rb-migrations:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       DATABASE_URL: postgres://rustbrain:rustbrain@postgres:5432/rustbrain
     volumes:
       - ../migrations:/migrations:ro
       - ./scripts/migrate-control.sh:/usr/local/bin/migrate-control.sh:ro
-    command: ["sh", "/usr/local/bin/migrate-control.sh"]
+      - ./scripts/migrate-tenant.sh:/usr/local/bin/migrate-tenant.sh:ro
+    command: ["sh", "-c", "sh /usr/local/bin/migrate-control.sh && sh /usr/local/bin/migrate-tenant.sh"]
     restart: "no"
     networks:
       - rb-net

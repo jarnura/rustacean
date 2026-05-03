@@ -1,4 +1,5 @@
 use std::env;
+use std::path::PathBuf;
 
 use anyhow::{Context as _, Result};
 
@@ -36,6 +37,13 @@ pub struct Config {
     /// `RB_DEV_TEST_ROUTES=1` — enable `POST /v1/ingest/test-publish` route.
     /// Must not be set in production.
     pub dev_test_routes: bool,
+
+    /// `RB_MIGRATIONS_ROOT` — directory that contains `tenant/` and `control/`
+    /// migration sub-directories. When set, tenant migrations are applied
+    /// automatically after a new tenant schema is created during signup.
+    /// Defaults to `/migrations` (the standard mount point in Docker).
+    /// Set to `None` (env var absent) to disable automatic tenant migration.
+    pub migrations_root: Option<PathBuf>,
 }
 
 impl Config {
@@ -94,6 +102,7 @@ impl Config {
                 .unwrap_or_else(|_| "kafka:9092".to_owned()),
             dev_test_routes: env::var("RB_DEV_TEST_ROUTES")
                 .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true")),
+            migrations_root: env::var("RB_MIGRATIONS_ROOT").ok().map(PathBuf::from),
         })
     }
 
@@ -120,6 +129,7 @@ impl Config {
             gh_app_webhook_secret: None,
             kafka_bootstrap_servers: "localhost:9092".to_owned(),
             dev_test_routes: false,
+            migrations_root: None,
         }
     }
 }

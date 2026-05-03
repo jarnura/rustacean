@@ -47,6 +47,7 @@ COPY services/migrate/      services/migrate/
 COPY services/audit-worker/ services/audit-worker/
 COPY services/parse-worker/ services/parse-worker/
 COPY proto/                 proto/
+COPY migrations/            migrations/
 
 # Install rdkafka build deps (needed because migrate crate uses rdkafka).
 RUN apt-get update -qq && \
@@ -72,6 +73,9 @@ USER nonroot
 
 COPY --from=builder /app/target/release/control-api     /usr/local/bin/control-api
 COPY --from=builder /app/target/release/rb-test-producer /usr/local/bin/rb-test-producer
+COPY --from=builder /app/migrations                      /app/migrations
+
+ENV RB_MIGRATIONS_ROOT=/app/migrations
 
 EXPOSE 8080
 

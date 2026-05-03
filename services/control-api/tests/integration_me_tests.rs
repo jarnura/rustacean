@@ -60,6 +60,7 @@ async fn real_db_state() -> Option<(AppState, PgPool)> {
         gh_app_webhook_secret: None,
         kafka_bootstrap_servers: "localhost:9092".to_owned(),
         dev_test_routes: false,
+        migrations_root: None,
     };
     let state = AppState {
         pool: pool.clone(),

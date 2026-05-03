@@ -64,6 +64,7 @@ async fn real_db_state() -> Option<(AppState, PgPool)> {
         gh_app_webhook_secret: None,
         kafka_bootstrap_servers: "127.0.0.1:19999".to_owned(),
         dev_test_routes: false,
+        migrations_root: std::env::var("RB_MIGRATIONS_ROOT").ok().map(std::path::PathBuf::from),
     };
     let state = AppState {
         pool: pool.clone(),

@@ -1065,6 +1065,7 @@ dependencies = [
  "http-body-util",
  "jsonwebtoken",
  "metrics-exporter-prometheus",
+ "migrate",
  "opentelemetry",
  "rand 0.9.4",
  "rb-auth",

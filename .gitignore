@@ -1,3 +1,4 @@
 /target
 /secrets
 compose/.no-auto-rebuild
+compose/*.env

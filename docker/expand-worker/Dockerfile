@@ -7,10 +7,11 @@ WORKDIR /app
 
 # Cache dependency downloads before copying source.
 COPY Cargo.toml Cargo.lock ./
-COPY crates/rb-tracing/Cargo.toml             crates/rb-tracing/Cargo.toml
-COPY crates/rb-schemas/Cargo.toml             crates/rb-schemas/Cargo.toml
-COPY crates/rb-kafka/Cargo.toml               crates/rb-kafka/Cargo.toml
-COPY crates/rb-blob/Cargo.toml                crates/rb-blob/Cargo.toml
+COPY crates/rb-tracing/Cargo.toml                 crates/rb-tracing/Cargo.toml
+COPY crates/rb-schemas/Cargo.toml                 crates/rb-schemas/Cargo.toml
+COPY crates/rb-kafka/Cargo.toml                   crates/rb-kafka/Cargo.toml
+COPY crates/rb-blob/Cargo.toml                    crates/rb-blob/Cargo.toml
+COPY crates/rb-feature-resolver/Cargo.toml        crates/rb-feature-resolver/Cargo.toml
 COPY services/migrate/Cargo.toml              services/migrate/Cargo.toml
 COPY services/control-api/Cargo.toml          services/control-api/Cargo.toml
 COPY services/audit-worker/Cargo.toml         services/audit-worker/Cargo.toml
@@ -27,9 +28,9 @@ COPY services/embed-worker/Cargo.toml         services/embed-worker/Cargo.toml
 # Stub sources so `cargo build` caches deps without the full source tree.
 RUN find crates services -name "Cargo.toml" | sed 's|Cargo.toml|src/lib.rs|' | \
     xargs -I{} sh -c 'mkdir -p "$(dirname {})" && touch "{}"' && \
-    mkdir -p services/ingest-graph/src && \
-    printf 'fn main() {}' > services/ingest-graph/src/main.rs && \
-    cargo build --release -p ingest-graph 2>/dev/null || true && \
+    mkdir -p services/expand-worker/src && \
+    printf 'fn main() {}' > services/expand-worker/src/main.rs && \
+    cargo build --release -p expand-worker 2>/dev/null || true && \
     rm -rf crates/*/src services/*/src
 
 # Install build dependencies (rdkafka requires cmake + C toolchain).
@@ -41,10 +42,10 @@ RUN apt-get update -qq && \
 
 # Copy real source and build.
 COPY crates/                    crates/
-COPY services/ingest-graph/     services/ingest-graph/
+COPY services/expand-worker/    services/expand-worker/
 COPY proto/                     proto/
 
-RUN cargo build --release -p ingest-graph
+RUN cargo build --release -p expand-worker
 
 # ── Stage 2: minimal runtime image ────────────────────────────────────────────
 FROM debian:bookworm-slim AS runtime
@@ -58,6 +59,6 @@ RUN apt-get update -qq && \
 
 USER nonroot
 
-COPY --from=builder /app/target/release/ingest-graph /usr/local/bin/ingest-graph
+COPY --from=builder /app/target/release/expand-worker /usr/local/bin/expand-worker
 
-ENTRYPOINT ["/usr/local/bin/ingest-graph"]
+ENTRYPOINT ["/usr/local/bin/expand-worker"]

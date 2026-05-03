@@ -21,7 +21,7 @@ use metrics::counter;
 use rb_blob::{BlobRef, BlobStore};
 use rb_kafka::{Consumer, EventEnvelope, Producer, RetryPolicy};
 use rb_schemas::{
-    EmbeddingPendingEvent, IngestStage, IngestStatus, IngestStatusEvent, TenantId,
+    IngestStage, IngestStatus, IngestStatusEvent, TenantId,
     TypecheckedItemEvent, typechecked_item_event,
 };
 use uuid::Uuid;
@@ -35,7 +35,6 @@ pub const TOPIC_PROJECTOR_EVENTS: &str = "rb.projector.events";
 struct EmbedCtx {
     blob_store: Arc<dyn BlobStore>,
     status_producer: Arc<Producer<IngestStatusEvent>>,
-    event_producer: Arc<Producer<EmbeddingPendingEvent>>,
     ollama_url: String,
     embedding_model: String,
     embedding_dimensions: u32,
@@ -43,12 +42,10 @@ struct EmbedCtx {
     http: reqwest::Client,
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn run(
     consumer: Consumer<TypecheckedItemEvent>,
     blob_store: Arc<dyn BlobStore>,
     status_producer: Arc<Producer<IngestStatusEvent>>,
-    event_producer: Arc<Producer<EmbeddingPendingEvent>>,
     ollama_url: String,
     embedding_model: String,
     embedding_dimensions: u32,
@@ -57,7 +54,6 @@ pub async fn run(
     let ctx = Arc::new(EmbedCtx {
         blob_store,
         status_producer,
-        event_producer,
         ollama_url,
         embedding_model,
         embedding_dimensions,
@@ -182,7 +178,7 @@ async fn process_item(
     counter!("rb_embed_worker_vectors_total").increment(1);
     tracing::debug!(%ingest_run_id, fqn = %ev.fqn, "embed_worker: vector upserted");
 
-    emit_embedding_pending(ctx, tenant_id, ev).await?;
+    emit_qdrant_done_status(ctx, tenant_id, ev).await?;
     emit_done_status(ctx, tenant_id, ev).await?;
 
     Ok(())
@@ -218,26 +214,28 @@ async fn resolve_body(
 
 // ── Kafka producers ───────────────────────────────────────────────────────────
 
-async fn emit_embedding_pending(
+async fn emit_qdrant_done_status(
     ctx: &EmbedCtx,
     tenant_id: TenantId,
     ev: &TypecheckedItemEvent,
 ) -> Result<()> {
-    let pending_ev = EmbeddingPendingEvent {
-        ingest_run_id: ev.ingest_run_id.clone(),
+    let status_ev = IngestStatusEvent {
+        ingest_request_id: Uuid::new_v4().to_string(),
         tenant_id: tenant_id.to_string(),
-        repo_id: ev.repo_id.clone(),
-        fqn: ev.fqn.clone(),
-        embedding_model: ctx.embedding_model.clone(),
-        dimensions: i32::try_from(ctx.embedding_dimensions).expect("embedding_dimensions fits i32"),
-        emitted_at_ms: chrono::Utc::now().timestamp_millis(),
+        status: IngestStatus::Done as i32,
+        error_message: String::new(),
+        occurred_at_ms: chrono::Utc::now().timestamp_millis(),
+        stage: IngestStage::ProjectQdrant as i32,
+        stage_seq: 9,
+        ingest_run_id: ev.ingest_run_id.clone(),
+        attempt: 0,
     };
-    let envelope = rb_kafka::EventEnvelope::new(tenant_id, pending_ev);
-    let key = format!("{}.{}", ev.tenant_id, ev.repo_id);
-    ctx.event_producer
+    let envelope = rb_kafka::EventEnvelope::new(tenant_id, status_ev);
+    let key = tenant_id.to_string();
+    ctx.status_producer
         .publish(TOPIC_PROJECTOR_EVENTS, key.as_bytes(), envelope)
         .await
-        .context("failed to publish EmbeddingPendingEvent")?;
+        .context("failed to publish qdrant done status")?;
     Ok(())
 }
 

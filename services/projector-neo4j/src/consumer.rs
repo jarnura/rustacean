@@ -124,6 +124,7 @@ async fn handle_envelope(
                 kind = ev.kind,
                 "projector_neo4j: relation written"
             );
+            emit_done_status(producer, &tenant_id, &ingest_run_id).await;
             if let Err(e) = consumer.commit(&envelope).await {
                 tracing::warn!("projector_neo4j: commit failed: {e}");
             }
@@ -161,6 +162,30 @@ async fn handle_envelope(
             .increment(1);
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
+    }
+}
+
+/// Emit `IngestStatusEvent{stage=ProjectNeo4j, status=Done}` to `rb.projector.events`.
+async fn emit_done_status(
+    producer: &Producer<IngestStatusEvent>,
+    tenant_id: &rb_schemas::TenantId,
+    ingest_run_id: &str,
+) {
+    let status_ev = IngestStatusEvent {
+        ingest_request_id: String::new(),
+        tenant_id: tenant_id.to_string(),
+        status: IngestStatus::Done as i32,
+        error_message: String::new(),
+        occurred_at_ms: chrono::Utc::now().timestamp_millis(),
+        stage: IngestStage::ProjectNeo4j as i32,
+        stage_seq: 0,
+        ingest_run_id: ingest_run_id.to_owned(),
+        attempt: 0,
+    };
+    let env = EventEnvelope::new(*tenant_id, status_ev);
+    let key = tenant_id.to_string();
+    if let Err(e) = producer.publish(TOPIC_PROJECTOR_EVENTS, key.as_bytes(), env).await {
+        tracing::error!("projector_neo4j: failed to publish done status event: {e}");
     }
 }
 

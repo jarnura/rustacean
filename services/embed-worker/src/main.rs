@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result};
 use rb_blob::store_from_env;
 use rb_kafka::{Consumer, ConsumerCfg, Producer, ProducerCfg};
-use rb_schemas::{EmbeddingPendingEvent, IngestStatusEvent, TypecheckedItemEvent};
+use rb_schemas::{IngestStatusEvent, TypecheckedItemEvent};
 
 mod consumer;
 mod embedder;
@@ -43,8 +43,6 @@ async fn main() -> Result<()> {
 
     let status_producer =
         Arc::new(Producer::<IngestStatusEvent>::new(&ProducerCfg::default())?);
-    let event_producer =
-        Arc::new(Producer::<EmbeddingPendingEvent>::new(&ProducerCfg::default())?);
 
     tracing::info!("embed-worker starting");
 
@@ -52,7 +50,6 @@ async fn main() -> Result<()> {
         item_consumer,
         blob_store,
         status_producer,
-        event_producer,
         ollama_url,
         embedding_model,
         embedding_dimensions,

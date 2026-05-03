@@ -1,18 +1,55 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use sqlx::PgPool;
 
 use crate::error::MigrateError;
 use crate::pg::runner::{migrations_dir, MigrationStatus, Runner};
 
-pub async fn migrate_tenant(pool: &PgPool, tenant_id: &str, repo_root: &Path) -> Result<usize, MigrateError> {
+/// Apply tenant migrations for a tenant identified by hex ID.
+///
+/// The `pool` reference is consumed only to clone the pool — the returned
+/// future is `'static` and captures no caller lifetimes.
+pub fn migrate_tenant(
+    pool: &PgPool,
+    tenant_id: &str,
+    repo_root: &Path,
+) -> impl std::future::Future<Output = Result<usize, MigrateError>> + use<> {
+    let pool = pool.clone();
     let schema = tenant_schema_name(tenant_id);
     let dir = migrations_dir(repo_root, "tenant");
+    async move { migrate_tenant_schema_inner(pool, schema, dir).await }
+}
+
+/// Apply tenant migrations to an already-named schema from an explicit directory.
+///
+/// Used by `control-api` on signup: the caller already has the schema name and
+/// the path to the `migrations/tenant/` directory, so no repo-root indirection
+/// is needed.
+///
+/// The `pool` reference is consumed only to clone the pool — the returned
+/// future is `'static` and captures no caller lifetimes.
+pub fn migrate_tenant_schema(
+    pool: &PgPool,
+    schema: &str,
+    tenant_migrations_dir: &Path,
+) -> impl std::future::Future<Output = Result<usize, MigrateError>> + use<> {
+    let pool = pool.clone();
+    let schema = schema.to_owned();
+    let dir = tenant_migrations_dir.to_owned();
+    async move { migrate_tenant_schema_inner(pool, schema, dir).await }
+}
+
+async fn migrate_tenant_schema_inner(
+    pool: PgPool,
+    schema: String,
+    dir: PathBuf,
+) -> Result<usize, MigrateError> {
     let mut conn = pool.acquire().await?;
     let runner = Runner::new(&schema, &dir);
     runner.bootstrap(&mut conn).await?;
     runner.apply_all(&mut conn).await
 }
+
 
 /// Applies tenant migrations to all existing tenant schemas in parallel-safe order.
 ///

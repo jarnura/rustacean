@@ -250,6 +250,9 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
       OTEL_SERVICE_NAME: control-api
       RUST_LOG: "info,control_api=debug"
+      RB_MIGRATIONS_ROOT: /migrations
+    volumes:
+      - ../migrations:/migrations:ro
     ports:
       - "${CONTROL_API_HOST_PORT:-8080}:8080"
     networks:

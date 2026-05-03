@@ -29,6 +29,7 @@ pub struct SignupResponse {
 
 struct SignupTransactionResult {
     user_id: Uuid,
+    tenant_schema: String,
     session_token: SessionToken,
     email_token: EmailToken,
 }
@@ -60,6 +61,19 @@ pub async fn signup(
         execute_signup_transaction(&mut tx, &body, &password_hash, state.config.session_ttl_days)
             .await?;
     tx.commit().await?;
+
+    if let Some(migrations_root) = state.config.migrations_root.clone() {
+        let pool = state.pool.clone();
+        let tenant_dir = migrations_root.join("tenant");
+        if let Err(e) = migrate::migrate_tenant_schema(&pool, &result.tenant_schema, &tenant_dir).await {
+            tracing::error!(
+                tenant_schema = %result.tenant_schema,
+                error = %e,
+                "tenant schema migration failed after signup"
+            );
+            return Err(AppError::Internal(anyhow::anyhow!("tenant migration failed: {e}")));
+        }
+    }
 
     let verify_link = format!(
         "{}/auth/verify-email?token={}",
@@ -168,7 +182,7 @@ async fn execute_signup_transaction(
     .execute(&mut **tx)
     .await?;
 
-    Ok(SignupTransactionResult { user_id, session_token, email_token })
+    Ok(SignupTransactionResult { user_id, tenant_schema: schema.to_owned(), session_token, email_token })
 }
 
 fn build_session_cookie(token: &str, secure: bool) -> String {

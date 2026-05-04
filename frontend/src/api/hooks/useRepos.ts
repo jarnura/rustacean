@@ -11,7 +11,7 @@ type RepoItem = components["schemas"]["RepoItem"];
 type ConnectedReposResponse = components["schemas"]["ConnectedReposResponse"];
 type ConnectRepoRequest = components["schemas"]["ConnectRepoRequest"];
 type ConnectRepoResponse = components["schemas"]["ConnectRepoResponse"];
-type TriggerIngestResponse = components["schemas"]["TriggerIngestResponse"];
+type TriggerIngestionResponse = components["schemas"]["TriggerIngestionResponse"];
 
 // AvailableRepo is the runtime shape returned by GET /v1/github/installations/{id}/available-repos.
 // The generated schema incorrectly maps it to ListReposResponse (a naming collision in the backend).
@@ -75,11 +75,11 @@ export function useConnectRepo(tenantId: string) {
 
 export function useTriggerIngest(tenantId: string) {
   const qc = useQueryClient();
-  return useMutation<TriggerIngestResponse, ApiError, string>({
+  return useMutation<TriggerIngestionResponse, ApiError, string>({
     mutationFn: async (repoId) => {
       const { data, error, response } = await apiClient.POST(
-        "/v1/repos/{id}/ingest",
-        { params: { path: { id: repoId } } },
+        "/v1/repos/{repo_id}/ingestions",
+        { params: { path: { repo_id: repoId } }, body: {} },
       );
       if (error || !data) {
         throw toApiError(response.status, error);

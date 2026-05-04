@@ -63,7 +63,7 @@ function RepoDetailInner({
     setBusy(true);
     try {
       const result = await triggerIngest.mutateAsync(repo.repo_id);
-      setIngestRunId(result.run_id);
+      setIngestRunId(result.ingest_run_id);
       toast.success("Ingestion run queued.");
     } catch (err) {
       toast.error(formatApiError(err, "Could not trigger ingestion."));

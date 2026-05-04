@@ -57,9 +57,9 @@ struct ItemVisitor {
 }
 
 impl ItemVisitor {
-    fn push(&mut self, name: String, kind: Kind, span: proc_macro2::Span) {
-        let start: LineColumn = span.start();
-        let end: LineColumn = span.end();
+    fn push(&mut self, name: String, kind: Kind, start_span: proc_macro2::Span, end_span: proc_macro2::Span) {
+        let start: LineColumn = start_span.start();
+        let end: LineColumn = end_span.end();
         self.items.push(ExtractedItem {
             name,
             kind,
@@ -71,46 +71,59 @@ impl ItemVisitor {
 
 impl<'ast> Visit<'ast> for ItemVisitor {
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
-        self.push(node.sig.ident.to_string(), Kind::Fn, node.sig.ident.span());
+        let end = node.block.brace_token.span.close();
+        self.push(node.sig.ident.to_string(), Kind::Fn, node.sig.fn_token.span, end);
     }
 
     fn visit_item_struct(&mut self, node: &'ast syn::ItemStruct) {
-        self.push(node.ident.to_string(), Kind::Struct, node.ident.span());
+        let end = match &node.fields {
+            syn::Fields::Named(f) => f.brace_token.span.close(),
+            syn::Fields::Unnamed(f) => f.paren_token.span.close(),
+            syn::Fields::Unit => node.semi_token.map_or(node.ident.span(), |s| s.span),
+        };
+        self.push(node.ident.to_string(), Kind::Struct, node.struct_token.span, end);
     }
 
     fn visit_item_enum(&mut self, node: &'ast syn::ItemEnum) {
-        self.push(node.ident.to_string(), Kind::Enum, node.ident.span());
+        let end = node.brace_token.span.close();
+        self.push(node.ident.to_string(), Kind::Enum, node.enum_token.span, end);
     }
 
     fn visit_item_trait(&mut self, node: &'ast syn::ItemTrait) {
-        self.push(node.ident.to_string(), Kind::Trait, node.ident.span());
+        let end = node.brace_token.span.close();
+        self.push(node.ident.to_string(), Kind::Trait, node.trait_token.span, end);
     }
 
     fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
         let name = impl_name(node);
-        self.push(name, Kind::Impl, node.impl_token.span);
+        let end = node.brace_token.span.close();
+        self.push(name, Kind::Impl, node.impl_token.span, end);
     }
 
     fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
-        self.push(node.ident.to_string(), Kind::Mod, node.ident.span());
-        // Do NOT recurse into inline mod bodies — callers handle nested files.
+        let end = node.content.as_ref().map_or(
+            node.semi.map_or(node.ident.span(), |s| s.span),
+            |(brace, _)| brace.span.close(),
+        );
+        self.push(node.ident.to_string(), Kind::Mod, node.mod_token.span, end);
     }
 
     fn visit_item_const(&mut self, node: &'ast syn::ItemConst) {
-        self.push(node.ident.to_string(), Kind::Const, node.ident.span());
+        self.push(node.ident.to_string(), Kind::Const, node.const_token.span, node.semi_token.span);
     }
 
     fn visit_item_type(&mut self, node: &'ast syn::ItemType) {
-        self.push(node.ident.to_string(), Kind::TypeAlias, node.ident.span());
+        self.push(node.ident.to_string(), Kind::TypeAlias, node.type_token.span, node.semi_token.span);
     }
 
     fn visit_item_static(&mut self, node: &'ast syn::ItemStatic) {
-        self.push(node.ident.to_string(), Kind::Static, node.ident.span());
+        self.push(node.ident.to_string(), Kind::Static, node.static_token.span, node.semi_token.span);
     }
 
     fn visit_item_macro(&mut self, node: &'ast syn::ItemMacro) {
         if let Some(ident) = &node.ident {
-            self.push(ident.to_string(), Kind::MacroDef, ident.span());
+            let end = node.semi_token.map_or(ident.span(), |s| s.span);
+            self.push(ident.to_string(), Kind::MacroDef, ident.span(), end);
         }
     }
 }
@@ -224,6 +237,22 @@ mod tests {
         let items = extract_items(src).unwrap();
         assert_eq!(items[0].line_start, 1);
         assert_eq!(items[1].line_start, 2);
+    }
+
+    #[test]
+    fn multiline_fn_has_distinct_line_end() {
+        let src = "fn multi(\n    x: i32,\n) -> i32 {\n    x + 1\n}";
+        let items = extract_items(src).unwrap();
+        assert_eq!(items[0].line_start, 1);
+        assert_eq!(items[0].line_end, 5);
+    }
+
+    #[test]
+    fn multiline_struct_has_distinct_line_end() {
+        let src = "pub struct Cfg {\n    host: String,\n    port: u16,\n}";
+        let items = extract_items(src).unwrap();
+        assert_eq!(items[0].line_start, 1);
+        assert_eq!(items[0].line_end, 4);
     }
 
     #[test]
